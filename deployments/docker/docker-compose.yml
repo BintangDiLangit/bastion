@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # API Server
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+      target: api
+    container_name: csa-api
+    ports:
+      - "8080:8080"
+    environment:
+      - CSA_SERVER_HOST=0.0.0.0
+      - CSA_SERVER_PORT=8080
+      - CSA_SERVER_MODE=release
+      - CSA_DATABASE_HOST=postgres
+      - CSA_DATABASE_PORT=5432
+      - CSA_DATABASE_USER=postgres
+      - CSA_DATABASE_PASSWORD=${DB_PASSWORD:-postgres}
+      - CSA_DATABASE_DATABASE=code_security_auditor
+      - CSA_REDIS_HOST=redis
+      - CSA_REDIS_PORT=6379
+      - CSA_AGENT_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - CSA_REPORTER_GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - repos:/tmp/code-security-auditor/repos
+      - reports:/tmp/code-security-auditor/reports
+    networks:
+      - csa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Background Worker
+  worker:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+      target: worker
+    container_name: csa-worker
+    environment:
+      - CSA_DATABASE_HOST=postgres
+      - CSA_DATABASE_PORT=5432
+      - CSA_DATABASE_USER=postgres
+      - CSA_DATABASE_PASSWORD=${DB_PASSWORD:-postgres}
+      - CSA_DATABASE_DATABASE=code_security_auditor
+      - CSA_REDIS_HOST=redis
+      - CSA_REDIS_PORT=6379
+      - CSA_AGENT_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - CSA_REPORTER_GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - repos:/tmp/code-security-auditor/repos
+      - reports:/tmp/code-security-auditor/reports
+    networks:
+      - csa-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: csa-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=code_security_auditor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../internal/database/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - csa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache/Queue
+  redis:
+    image: redis:7-alpine
+    container_name: csa-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - csa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Asynq Monitor (Optional - for queue monitoring)
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    container_name: csa-asynqmon
+    ports:
+      - "8081:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+    networks:
+      - csa-network
+    profiles:
+      - monitoring
+
+networks:
+  csa-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  repos:
+  reports:

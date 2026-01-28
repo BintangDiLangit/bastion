@@ -1,0 +1,72 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+coverage.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Config files with secrets
+configs/config.local.yaml
+configs/*.local.yaml
+
+# Log files
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+/tmp
+
+# Build output
+dist/
+build/
+
+# Reports
+reports/
+*.pdf
+*.sarif
+*.sarif.json
+
+# Cloned repositories
+repos/
+
+# Go workspace
+go.work
+
+# Air (live reload)
+.air.toml
+tmp/
+
+# Debug
+debug/
+__debug_bin
