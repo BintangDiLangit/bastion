@@ -1,357 +1,109 @@
-# Architecture Documentation
+# System Architecture
 
 ## Overview
 
-Code Security Auditor is designed as a modular, scalable system following clean architecture principles. The system consists of multiple components that work together to provide comprehensive security scanning capabilities.
+Code Security Auditor is a distributed system designed to perform scalable, automated security analysis of source code repositories. It combines static analysis (SAST) with AI-powered enhancements to detect vulnerabilities, secrets, and compliance issues.
 
-## System Architecture
+## System Diagram
 
-```
-                                    ┌──────────────────────────────────────┐
-                                    │           External Services          │
-                                    ├──────────────────────────────────────┤
-                                    │  GitHub  │  GitLab  │  Google AI     │
-                                    └────┬─────┴────┬─────┴────┬───────────┘
-                                         │          │          │
-┌────────────────────────────────────────┼──────────┼──────────┼────────────────┐
-│                                        │          │          │                │
-│    ┌─────────────────┐                 │          │          │                │
-│    │   CLI Client    │                 │          │          │                │
-│    └────────┬────────┘                 │          │          │                │
-│             │                          │          │          │                │
-│    ┌────────▼────────┐    ┌────────────▼──────────▼────┐     │                │
-│    │   API Server    │◀──▶│      Webhook Handler       │     │                │
-│    │   (Gin HTTP)    │    └────────────────────────────┘     │                │
-│    └────────┬────────┘                                       │                │
-│             │                                                │                │
-│    ┌────────▼────────┐                                       │                │
-│    │   Job Queue     │◀──────────────────────────────────────┤                │
-│    │   (Asynq)       │                                       │                │
-│    └────────┬────────┘                                       │                │
-│             │                                                │                │
-│    ┌────────▼────────┐    ┌─────────────────┐    ┌──────────▼──────────┐     │
-│    │    Workers      │───▶│    Scanner      │───▶│    AI Agent         │     │
-│    │  (Background)   │    │    Engine       │    │    (Gemini)         │     │
-│    └────────┬────────┘    └────────┬────────┘    └─────────────────────┘     │
-│             │                      │                                          │
-│             │             ┌────────▼────────┐                                │
-│             │             │  Rule Engine    │                                │
-│             │             └─────────────────┘                                │
-│             │                                                                │
-│    ┌────────▼────────┐    ┌─────────────────┐                                │
-│    │   Reporter      │───▶│  PDF/HTML/JSON  │                                │
-│    │   Generator     │    │  Generation     │                                │
-│    └─────────────────┘    └─────────────────┘                                │
-│                                                                              │
-│    ┌─────────────────────────────────────────────────────────────────┐      │
-│    │                      Data Layer                                   │      │
-│    ├──────────────────────────┬──────────────────────────────────────┤      │
-│    │       PostgreSQL         │              Redis                    │      │
-│    │   (Persistent Storage)   │     (Cache, Queue, Sessions)         │      │
-│    └──────────────────────────┴──────────────────────────────────────┘      │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    User[User / CI System] -->|HTTP/REST| API[API Server]
+    API -->|Queue Job| Redis[Redis Queue]
+    API -->|Read/Write| DB[(PostgreSQL)]
+    
+    Worker[Worker Service] -->|Pop Job| Redis
+    Worker -->|Update Status| DB
+    
+    subgraph Scanner Core
+        Worker -->|Clone| Git[Git Manager]
+        Worker -->|Parse| Parser[Polyglot Parser]
+        Worker -->|Analyze| Analyzer[Rules Engine]
+    end
+    
+    subgraph AI Integration
+        Worker -->|Context| ADK[Google ADK Agent]
+        ADK -->|Insights| Worker
+    end
+    
+    subgraph External
+        Worker -->|Pull Code| GitHub[GitHub / GitLab]
+        Worker -->|Post Comment| GitHub
+    end
 ```
 
 ## Components
 
 ### 1. API Server (`cmd/api`)
+- **Role**: Entry point for users and webhooks.
+- **Tech**: Go, Gin Framework.
+- **Responsibilities**:
+    - Authentication & Authorization.
+    - Rate Limiting.
+    - Request validation.
+    - Job enqueuing (via Asynq/Redis).
+    - Data persistence (PostgreSQL).
 
-The HTTP API server handles all external requests.
+### 2. Worker Service (`cmd/worker`)
+- **Role**: Asynchronous task processor.
+- **Tech**: Go, Asynq.
+- **Responsibilities**:
+    - Processing scan jobs from Redis.
+    - Executing Git operations (Clone/Diff).
+    - Running the Scanner Pipeline.
+    - interacting with AI Agent.
+    - Generating reports.
 
-**Responsibilities:**
-- REST API endpoints
-- Authentication and authorization
-- Request validation
-- Rate limiting
-- Webhook handling
+### 3. Database (`PostgreSQL`)
+- **Role**: Primary persistent store.
+- **Schema**:
+    - `users`: Account information.
+    - `repositories`: Monitored configs.
+    - `scans`: History of scan executions.
+    - `vulnerabilities`: Detected issues.
+    - `audit_logs`: System activity.
 
-**Key Technologies:**
-- Gin web framework
-- JWT/API key authentication
-- Structured logging
+### 4. Message Queue (`Redis`)
+- **Role**: Task queue and cache.
+- **Tech**: Redis, Asynq.
+- **Functions**:
+    - Reliability layer for scan jobs.
+    - Retry mechanism.
+    - Ephemeral caching for rate limiters.
 
-### 2. Background Workers (`cmd/worker`)
+### 5. AI Agent (`Google ADK`)
+- **Role**: Intelligent analysis enhancement.
+- **Functions**:
+    - False positive reduction.
+    - Fix suggestion generation.
+    - Code context understanding.
 
-Async job processing for long-running tasks.
+## Data Flow
 
-**Responsibilities:**
-- Repository scanning
-- Report generation
-- Webhook processing
-- Cleanup tasks
+### Scan Workflow
+1. **Trigger**: User POSTs to `/scans` or Webhook event occurs.
+2. **Queue**: API creates `Scan` record (status: `queued`) and pushes job to Redis.
+3. **Process**: Worker claims job.
+4. **Clone**: Git Manager clones repo to temp volume.
+5. **Parse**: Parser constructs AST and identifies file types.
+6. **Analyze**: Analyzer runs regex patterns and rules against AST.
+7. **AI Verify**: (Optional) High-severity findings sent to AI for verification.
+8. **Report**: Results saved to DB; notifications sent via Webhooks/GitHub.
 
-**Key Technologies:**
-- Asynq (Redis-based queue)
-- Concurrent workers
+## Security Considerations
 
-### 3. CLI Tool (`cmd/cli`)
-
-Command-line interface for local scanning.
-
-**Responsibilities:**
-- Local directory scanning
-- CI/CD integration
-- Output formatting
-
-**Key Technologies:**
-- Cobra CLI framework
-- Multiple output formats
-
-### 4. Scanner Engine (`internal/scanner`)
-
-Core scanning functionality.
-
-**Components:**
-
-```
-scanner/
-├── manager.go      # Orchestration
-├── git.go          # Git operations
-├── parser.go       # Code parsing
-├── analyzer.go     # Static analysis
-├── metrics.go      # Code metrics
-└── rules/          # Detection rules
-    ├── rules.go           # Rule engine
-    ├── sql_injection.go   # SQL injection
-    ├── xss.go             # XSS detection
-    ├── secrets.go         # Secret detection
-    └── dependency.go      # Dependency check
-```
-
-**Scanning Pipeline:**
-
-```
-1. Clone/Access Repository
-        │
-        ▼
-2. Parse Files (AST)
-        │
-        ▼
-3. Apply Rules
-        │
-        ▼
-4. Collect Vulnerabilities
-        │
-        ▼
-5. Calculate Metrics
-        │
-        ▼
-6. Generate Report
-```
-
-### 5. AI Agent (`internal/agent`)
-
-Integration with Google Generative AI.
-
-**Capabilities:**
-- Vulnerability analysis
-- Remediation suggestions
-- Code review
-- Security summaries
-
-**Components:**
-- Client wrapper
-- Prompt engineering
-- Response parsing
-- Custom tools
-
-### 6. Reporter (`internal/reporter`)
-
-Report generation in multiple formats.
-
-**Supported Formats:**
-- JSON (machine-readable)
-- PDF (executive reports)
-- HTML (interactive)
-- Markdown (documentation)
-- SARIF (IDE integration)
-
-### 7. Data Layer
-
-**PostgreSQL:**
-- Repository metadata
-- Scan history
-- Vulnerabilities
-- Reports
-- API keys
-
-**Redis:**
-- Job queue
-- Caching
-- Rate limiting
-- Session storage
-- Real-time progress
-
-## Data Models
-
-### Core Entities
-
-```
-┌─────────────────┐     ┌─────────────────┐
-│   Repository    │────▶│      Scan       │
-└─────────────────┘     └────────┬────────┘
-                                 │
-                        ┌────────▼────────┐
-                        │  Vulnerability  │
-                        └────────┬────────┘
-                                 │
-                        ┌────────▼────────┐
-                        │     Report      │
-                        └─────────────────┘
-```
-
-### Entity Relationships
-
-- **Repository** → has many **Scans**
-- **Scan** → has many **Vulnerabilities**
-- **Scan** → has many **Reports**
-- **Vulnerability** → belongs to **Scan**
-
-## Security Architecture
-
-### Authentication
-
-1. **API Keys**
-   - Hashed storage (SHA-256)
-   - Scoped permissions
-   - Rate limiting per key
-
-2. **Webhook Signatures**
-   - HMAC-SHA256 verification
-   - Timestamp validation
-
-### Authorization
-
-- Role-based access control (RBAC)
-- Scoped API keys
-- Resource-level permissions
-
-### Data Protection
-
-- Secrets masked in reports
-- Encrypted storage for tokens
-- TLS for all communications
+- **Secrets Management**: No secrets stored in code. Environment variables used for all sensitive keys.
+- **Sandboxing**: Scans run in ephemeral containers (planned feature).
+- **Input Validation**: Strict validation on all API inputs to prevent injection.
+- **Encryption**: TLS for all data in transit. At-rest encryption for DB volumes recommended.
 
 ## Scalability
 
-### Horizontal Scaling
-
-```
-                    ┌──────────────┐
-                    │ Load Balancer│
-                    └──────┬───────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-    ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐
-    │ API Pod 1 │    │ API Pod 2 │    │ API Pod 3 │
-    └───────────┘    └───────────┘    └───────────┘
-          │                │                │
-          └────────────────┼────────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │    Redis     │
-                    │   (Queue)    │
-                    └──────┬───────┘
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-    ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐
-    │ Worker 1  │    │ Worker 2  │    │ Worker 3  │
-    └───────────┘    └───────────┘    └───────────┘
-```
-
-### Performance Optimizations
-
-1. **Caching**
-   - Repository metadata
-   - Scan results
-   - Rule configurations
-
-2. **Parallel Processing**
-   - Concurrent file scanning
-   - Parallel rule execution
-   - Batch database operations
-
-3. **Queue Management**
-   - Priority queues
-   - Retry mechanisms
-   - Dead letter queues
-
-## Deployment Options
-
-### Docker Compose (Development)
-
-```yaml
-services:
-  api:      # API server
-  worker:   # Background workers
-  postgres: # Database
-  redis:    # Cache/Queue
-```
-
-### Kubernetes (Production)
-
-```
-k8s/
-├── namespace.yaml
-├── configmap.yaml
-├── secret.yaml
-├── api-deployment.yaml
-├── worker-deployment.yaml
-├── postgres-statefulset.yaml
-├── redis-deployment.yaml
-├── service.yaml
-└── ingress.yaml
-```
-
-## Monitoring
-
-### Metrics
-
-- Request latency
-- Scan duration
-- Queue depth
-- Error rates
-- Resource utilization
-
-### Logging
-
-- Structured JSON logs
-- Request tracing
-- Error tracking
-
-### Health Checks
-
-- `/health` - Overall health
-- `/health/live` - Liveness probe
-- `/health/ready` - Readiness probe
-
-## Extension Points
-
-### Custom Rules
-
-```go
-type CustomRule struct {
-    *rules.BaseRule
-}
-
-func (r *CustomRule) Check(ctx context.Context, file *scanner.ParsedFile) ([]models.Vulnerability, error) {
-    // Custom detection logic
-}
-```
-
-### Custom Report Formats
-
-```go
-type CustomReporter interface {
-    Generate(data ReportData) (*GeneratedReport, error)
-}
-```
-
-### Custom Integrations
-
-- Additional Git providers
-- Notification channels
-- External vulnerability databases
+- **Horizontal Scaling**:
+    - **API**: Stateless, can scale behind load balancer.
+    - **Worker**: Can scale independently based on queue depth.
+- **Database**:
+    - Connection pooling.
+    - Read replicas for high-traffic reporting.
+- **Redis**:
+    - Cluster mode for high availability.
