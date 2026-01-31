@@ -306,7 +306,7 @@ func (g *GitManager) ValidateRepositoryURL(repoURL string) error {
 	}
 
 	// Check for valid schemes
-	validSchemes := map[string]bool{"https": true, "http": true, "git": true, "ssh": true}
+	validSchemes := map[string]bool{"https": true, "http": true, "git": true, "ssh": true, "file": true}
 	if !validSchemes[parsedURL.Scheme] {
 		return fmt.Errorf("%w: unsupported scheme %s", ErrInvalidRepositoryURL, parsedURL.Scheme)
 	}

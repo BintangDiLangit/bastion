@@ -30,21 +30,21 @@ const (
 type Category string
 
 const (
-	CategorySQLInjection         Category = "sql_injection"
-	CategoryXSS                  Category = "xss"
-	CategorySecrets              Category = "secrets"
-	CategoryDependency           Category = "dependency"
-	CategoryPathTraversal        Category = "path_traversal"
-	CategoryCommandInjection     Category = "command_injection"
-	CategorySSRF                 Category = "ssrf"
+	CategorySQLInjection            Category = "sql_injection"
+	CategoryXSS                     Category = "xss"
+	CategorySecrets                 Category = "secrets"
+	CategoryDependency              Category = "dependency"
+	CategoryPathTraversal           Category = "path_traversal"
+	CategoryCommandInjection        Category = "command_injection"
+	CategorySSRF                    Category = "ssrf"
 	CategoryInsecureDeserialization Category = "insecure_deserialization"
-	CategoryWeakCrypto           Category = "weak_crypto"
-	CategoryInsecureRandom       Category = "insecure_random"
-	CategoryHardcodedCredentials Category = "hardcoded_credentials"
-	CategorySensitiveDataExposure Category = "sensitive_data_exposure"
-	CategoryMissingAuth          Category = "missing_auth"
-	CategoryCodeQuality          Category = "code_quality"
-	CategoryMisconfiguration     Category = "misconfiguration"
+	CategoryWeakCrypto              Category = "weak_crypto"
+	CategoryInsecureRandom          Category = "insecure_random"
+	CategoryHardcodedCredentials    Category = "hardcoded_credentials"
+	CategorySensitiveDataExposure   Category = "sensitive_data_exposure"
+	CategoryMissingAuth             Category = "missing_auth"
+	CategoryCodeQuality             Category = "code_quality"
+	CategoryMisconfiguration        Category = "misconfiguration"
 )
 
 // Finding represents a security or code quality finding.
@@ -70,13 +70,13 @@ type Finding struct {
 
 // AnalysisResult contains the results of analyzing a repository.
 type AnalysisResult struct {
-	TotalFiles     int                   `json:"total_files"`
-	TotalLines     int                   `json:"total_lines"`
-	Findings       []Finding             `json:"findings"`
-	Metrics        *CodeMetrics          `json:"metrics"`
-	Summary        AnalysisSummary       `json:"summary"`
-	LanguageStats  map[string]int        `json:"language_stats"`
-	QualityIssues  []QualityIssue        `json:"quality_issues"`
+	TotalFiles    int             `json:"total_files"`
+	TotalLines    int             `json:"total_lines"`
+	Findings      []Finding       `json:"findings"`
+	Metrics       *CodeMetrics    `json:"metrics"`
+	Summary       AnalysisSummary `json:"summary"`
+	LanguageStats map[string]int  `json:"language_stats"`
+	QualityIssues []QualityIssue  `json:"quality_issues"`
 }
 
 // AnalysisSummary provides a summary of the analysis.
@@ -109,7 +109,7 @@ func NewAnalyzer(cfg config.ScannerConfig, logger *logrus.Logger) *Analyzer {
 	}
 
 	// Initialize rule engine
-	a.ruleEngine = rules.NewRuleEngine(cfg, logger)
+	a.ruleEngine = rules.NewEngine(cfg, logger)
 
 	// Register built-in patterns
 	a.registerBuiltinPatterns()
@@ -603,11 +603,11 @@ func (a *Analyzer) analyzePython(file *ParsedFile) []Finding {
 
 	// Check for dangerous function usage
 	dangerousFuncs := map[*regexp.Regexp]struct {
-		ruleID  string
-		title   string
-		desc    string
-		sev     Severity
-		cat     Category
+		ruleID string
+		title  string
+		desc   string
+		sev    Severity
+		cat    Category
 	}{
 		regexp.MustCompile(`\beval\s*\(`): {
 			"PY001", "Dangerous eval() Usage",
@@ -663,12 +663,12 @@ func (a *Analyzer) analyzeJS(file *ParsedFile) []Finding {
 
 	// Check for dangerous patterns
 	jsPatterns := map[*regexp.Regexp]struct {
-		ruleID  string
-		title   string
-		desc    string
-		sev     Severity
-		cat     Category
-		remed   string
+		ruleID string
+		title  string
+		desc   string
+		sev    Severity
+		cat    Category
+		remed  string
 	}{
 		regexp.MustCompile(`\.innerHTML\s*=\s*[^'"]`): {
 			"JS001", "Potential XSS via innerHTML",
@@ -730,11 +730,11 @@ func (a *Analyzer) analyzeJava(file *ParsedFile) []Finding {
 
 	// Java security patterns
 	javaPatterns := map[*regexp.Regexp]struct {
-		ruleID  string
-		title   string
-		desc    string
-		sev     Severity
-		cat     Category
+		ruleID string
+		title  string
+		desc   string
+		sev    Severity
+		cat    Category
 	}{
 		regexp.MustCompile(`Runtime\.getRuntime\(\)\.exec\s*\(`): {
 			"JAVA001", "Command Execution",
@@ -785,11 +785,11 @@ func (a *Analyzer) analyzePHP(file *ParsedFile) []Finding {
 
 	// PHP security patterns
 	phpPatterns := map[*regexp.Regexp]struct {
-		ruleID  string
-		title   string
-		desc    string
-		sev     Severity
-		cat     Category
+		ruleID string
+		title  string
+		desc   string
+		sev    Severity
+		cat    Category
 	}{
 		regexp.MustCompile(`\$_(GET|POST|REQUEST|COOKIE)\s*\[`): {
 			"PHP001", "Unsanitized User Input",
@@ -841,18 +841,18 @@ func (a *Analyzer) analyzePHP(file *ParsedFile) []Finding {
 
 // CodeMetrics holds code quality metrics.
 type CodeMetrics struct {
-	TotalFiles        int                `json:"total_files"`
-	TotalLines        int                `json:"total_lines"`
-	CodeLines         int                `json:"code_lines"`
-	CommentLines      int                `json:"comment_lines"`
-	BlankLines        int                `json:"blank_lines"`
-	LanguageBreakdown map[string]int     `json:"language_breakdown"`
-	FileTypeBreakdown map[string]int     `json:"file_type_breakdown"`
-	AverageFileSize   float64            `json:"average_file_size"`
-	LargestFiles      []FileSizeInfo     `json:"largest_files"`
-	ComplexityScore   float64            `json:"complexity_score"`
-	DuplicationScore  float64            `json:"duplication_score"`
-	FunctionMetrics   FunctionMetrics    `json:"function_metrics"`
+	TotalFiles        int             `json:"total_files"`
+	TotalLines        int             `json:"total_lines"`
+	CodeLines         int             `json:"code_lines"`
+	CommentLines      int             `json:"comment_lines"`
+	BlankLines        int             `json:"blank_lines"`
+	LanguageBreakdown map[string]int  `json:"language_breakdown"`
+	FileTypeBreakdown map[string]int  `json:"file_type_breakdown"`
+	AverageFileSize   float64         `json:"average_file_size"`
+	LargestFiles      []FileSizeInfo  `json:"largest_files"`
+	ComplexityScore   float64         `json:"complexity_score"`
+	DuplicationScore  float64         `json:"duplication_score"`
+	FunctionMetrics   FunctionMetrics `json:"function_metrics"`
 }
 
 // FileSizeInfo holds size information for a file.

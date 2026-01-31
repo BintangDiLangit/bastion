@@ -84,7 +84,10 @@ require (
 	google.golang.org/protobuf v1.36.0 // indirect
 )
 
-require golang.org/x/oauth2 v0.24.0
+require (
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/oauth2 v0.24.0
+)
 
 require (
 	cloud.google.com/go v0.116.0 // indirect
@@ -97,6 +100,7 @@ require (
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.5 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
@@ -105,6 +109,7 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/onsi/gomega v1.34.2 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/redis/go-redis/v9 v9.7.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
