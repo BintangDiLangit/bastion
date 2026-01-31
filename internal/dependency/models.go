@@ -95,6 +95,17 @@ type Vulnerability struct {
 	Dismissed   bool
 }
 
+// VulnerabilityReport aggregates findings for a dependency
+type VulnerabilityReport struct {
+	Dependency      Dependency
+	Vulnerabilities []Vulnerability
+	TotalCount      int
+	CriticalCount   int
+	HighCount       int
+	MediumCount     int
+	LowCount        int
+}
+
 // DependencyManifest represents the parsed result of a dependency file
 type DependencyManifest struct {
 	FilePath           string

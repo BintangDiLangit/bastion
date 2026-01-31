@@ -23,7 +23,7 @@ type ParserManagerInterface interface {
 }
 
 type VulnerabilityClientInterface interface {
-	CheckVulnerabilities(ctx context.Context, dep Dependency) ([]Vulnerability, error)
+	CheckVulnerabilities(ctx context.Context, dep Dependency, pm PackageManager) ([]Vulnerability, error)
 }
 
 // Result represents the outcome of a dependency scan
@@ -71,7 +71,7 @@ func (s *Scanner) Scan(ctx context.Context, repoPath string) (*Result, error) {
 
 		// Enrich dependencies with vulnerabilities
 		for i, dep := range manifest.AllDependencies {
-			vulns, err := s.vulnClient.CheckVulnerabilities(ctx, dep)
+			vulns, err := s.vulnClient.CheckVulnerabilities(ctx, dep, manifest.PackageManager)
 			if err != nil {
 				s.logger.Warnf("Failed to check vulnerabilities for %s: %v", dep.Name, err)
 				continue
