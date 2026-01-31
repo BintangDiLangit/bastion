@@ -1,0 +1,11 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "lodash": "4.17.15",
+    "express": "^4.17.1"
+  },
+  "devDependencies": {
+    "mocha": "^8.0.0"
+  }
+}
