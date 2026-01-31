@@ -17,20 +17,22 @@ type Router struct {
 	engine         *gin.Engine
 	config         *config.Config
 	logger         *logrus.Logger
-	healthHandler  *handlers.HealthHandler
-	scanHandler    *handlers.ScanHandler
-	reportHandler  *handlers.ReportHandler
-	webhookHandler *handlers.WebhookHandler
+	healthHandler       *handlers.HealthHandler
+	scanHandler         *handlers.ScanHandler
+	reportHandler       *handlers.ReportHandler
+	webhookHandler      *handlers.WebhookHandler
+	dependencyHandler   *handlers.DependencyHandler
 }
 
 // RouterDeps holds dependencies for the router.
 type RouterDeps struct {
 	Config         *config.Config
 	Logger         *logrus.Logger
-	HealthHandler  *handlers.HealthHandler
-	ScanHandler    *handlers.ScanHandler
-	ReportHandler  *handlers.ReportHandler
-	WebhookHandler *handlers.WebhookHandler
+	HealthHandler       *handlers.HealthHandler
+	ScanHandler         *handlers.ScanHandler
+	ReportHandler       *handlers.ReportHandler
+	WebhookHandler      *handlers.WebhookHandler
+	DependencyHandler   *handlers.DependencyHandler
 }
 
 // NewRouter creates a new Router with all routes configured.
@@ -55,6 +57,11 @@ func NewRouter(deps RouterDeps) *Router {
 		scanHandler:    deps.ScanHandler,
 		reportHandler:  deps.ReportHandler,
 		webhookHandler: deps.WebhookHandler,
+	}
+
+	// Add dependency handler if provided
+	if deps.DependencyHandler != nil {
+		router.dependencyHandler = deps.DependencyHandler
 	}
 
 	router.setupMiddleware()
@@ -133,6 +140,17 @@ func (r *Router) setupRoutes() {
 				scans.POST("/:id/cancel", r.scanHandler.CancelScan)
 				scans.GET("/:id/vulnerabilities", r.scanHandler.GetScanVulnerabilities)
 				scans.GET("/:id/summary", r.scanHandler.GetScanSummary)
+
+				// Dependency scanning endpoints
+				if r.dependencyHandler != nil {
+					depScans := scans.Group("/:id/dependencies")
+					{
+						depScans.POST("", r.dependencyHandler.TriggerDependencyScan)
+						depScans.GET("/:dependency_scan_id", r.dependencyHandler.GetDependencyScanResults)
+						depScans.GET("/:dependency_scan_id/sbom", r.dependencyHandler.GetSBOM)
+						depScans.POST("/:dependency_scan_id/upgrade-plan", r.dependencyHandler.GenerateUpgradePlan)
+					}
+				}
 			}
 
 			// Vulnerabilities
@@ -157,6 +175,15 @@ func (r *Router) setupRoutes() {
 			{
 				rules.GET("", r.scanHandler.ListRules)
 				rules.GET("/:id", r.scanHandler.GetRule)
+			}
+
+			// Dependency endpoints
+			if r.dependencyHandler != nil {
+				deps := protected.Group("/dependencies")
+				{
+					deps.POST("/check", r.dependencyHandler.CheckSingleDependency)
+					deps.GET("/vulnerabilities/:cve_id", r.dependencyHandler.GetVulnerabilityDetails)
+				}
 			}
 		}
 	}

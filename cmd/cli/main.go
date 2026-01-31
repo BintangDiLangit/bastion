@@ -29,10 +29,13 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "csa",
-		Short: "Code Security Auditor - Automated security scanning",
-		Long: `Code Security Auditor (CSA) is a powerful tool for automated
-security scanning and vulnerability detection in code repositories.
+		Use:   "bastion",
+		Short: "🏰 Bastion - Your Code's Last Line of Defense",
+		Long: `🏰 BASTION - Your Code's Last Line of Defense
+Dependency Security Scanner v` + version + `
+
+Bastion is a powerful tool for automated security scanning and 
+vulnerability detection in code repositories and dependencies.
 
 It can detect various security issues including SQL injection, XSS,
 hardcoded secrets, vulnerable dependencies, and more.`,
@@ -49,6 +52,9 @@ hardcoded secrets, vulnerable dependencies, and more.`,
 	rootCmd.AddCommand(scanCmd())
 	rootCmd.AddCommand(rulesCmd())
 	rootCmd.AddCommand(versionCmd())
+	rootCmd.AddCommand(dependencyCmd())
+	rootCmd.AddCommand(sbomCmd())
+	rootCmd.AddCommand(licenseCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -516,4 +522,232 @@ func defaultExcludedExtensions() []string {
 		".sum",
 		".map",
 	}
+}
+
+// dependencyCmd creates the dependency command group.
+func dependencyCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dependency",
+		Short: "Dependency scanning and management commands",
+		Aliases: []string{"dep", "dependencies"},
+	}
+
+	cmd.AddCommand(dependencyCheckCmd())
+	cmd.AddCommand(dependencyVulnerabilitiesCmd())
+	cmd.AddCommand(dependencyUpgradePlanCmd())
+
+	return cmd
+}
+
+// dependencyCheckCmd creates the dependency check command.
+func dependencyCheckCmd() *cobra.Command {
+	var packageManager, name, version string
+
+	cmd := &cobra.Command{
+		Use:   "check [package-manager] [name] [version]",
+		Short: "Check a single dependency for vulnerabilities",
+		Long: `Check a specific dependency for known vulnerabilities.
+
+Examples:
+  bastion dependency check npm lodash 4.17.20
+  bastion dependency check pip django 4.1.0
+  bastion dependency check go github.com/gin-gonic/gin v1.9.0`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pm := args[0]
+			pkgName := args[1]
+			pkgVersion := args[2]
+
+			return runDependencyCheck(pm, pkgName, pkgVersion)
+		},
+	}
+
+	cmd.Flags().StringVarP(&packageManager, "package-manager", "p", "", "package manager (npm, pip, go)")
+	cmd.Flags().StringVarP(&name, "name", "n", "", "package name")
+	cmd.Flags().StringVarP(&version, "version", "v", "", "package version")
+
+	return cmd
+}
+
+// dependencyVulnerabilitiesCmd creates the vulnerabilities list command.
+func dependencyVulnerabilitiesCmd() *cobra.Command {
+	var severity string
+	var path string
+
+	cmd := &cobra.Command{
+		Use:   "vulnerabilities [path]",
+		Short: "List vulnerabilities in dependencies",
+		Long: `List all vulnerabilities found in project dependencies.
+
+Examples:
+  bastion dependencies vulnerabilities .
+  bastion dependencies vulnerabilities --severity critical,high
+  bastion dependencies vulnerabilities ./my-project`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scanPath := "."
+			if len(args) > 0 {
+				scanPath = args[0]
+			}
+
+			return runDependencyVulnerabilities(scanPath, severity)
+		},
+	}
+
+	cmd.Flags().StringVarP(&severity, "severity", "s", "", "filter by severity (critical,high,medium,low)")
+	cmd.Flags().StringVarP(&path, "path", "p", ".", "project path to scan")
+
+	return cmd
+}
+
+// dependencyUpgradePlanCmd creates the upgrade plan command.
+func dependencyUpgradePlanCmd() *cobra.Command {
+	var path string
+
+	cmd := &cobra.Command{
+		Use:   "upgrade-plan [path]",
+		Short: "Generate an upgrade plan for dependencies",
+		Long: `Generate a detailed upgrade plan to fix vulnerabilities.
+
+Examples:
+  bastion dependencies upgrade-plan .
+  bastion dependencies upgrade-plan ./my-project`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scanPath := "."
+			if len(args) > 0 {
+				scanPath = args[0]
+			}
+
+			return runDependencyUpgradePlan(scanPath)
+		},
+	}
+
+	cmd.Flags().StringVarP(&path, "path", "p", ".", "project path to scan")
+
+	return cmd
+}
+
+// sbomCmd creates the SBOM command group.
+func sbomCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sbom",
+		Short: "Software Bill of Materials commands",
+	}
+
+	cmd.AddCommand(sbomGenerateCmd())
+
+	return cmd
+}
+
+// sbomGenerateCmd creates the SBOM generate command.
+func sbomGenerateCmd() *cobra.Command {
+	var format, output string
+	var path string
+
+	cmd := &cobra.Command{
+		Use:   "generate [path]",
+		Short: "Generate a Software Bill of Materials",
+		Long: `Generate a Software Bill of Materials (SBOM) for a project.
+
+Examples:
+  bastion sbom generate .
+  bastion sbom generate --format cyclonedx --output sbom.json
+  bastion sbom generate ./my-project --format spdx`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scanPath := "."
+			if len(args) > 0 {
+				scanPath = args[0]
+			}
+
+			return runSBOMGenerate(scanPath, format, output)
+		},
+	}
+
+	cmd.Flags().StringVarP(&format, "format", "f", "cyclonedx", "SBOM format (cyclonedx, spdx)")
+	cmd.Flags().StringVarP(&output, "output", "o", "sbom.json", "output file path")
+	cmd.Flags().StringVarP(&path, "path", "p", ".", "project path to scan")
+
+	return cmd
+}
+
+// licenseCmd creates the license audit command.
+func licenseCmd() *cobra.Command {
+	var path, policy string
+
+	cmd := &cobra.Command{
+		Use:   "license [path]",
+		Short: "Audit dependencies for license compliance",
+		Long: `Audit project dependencies for license compliance issues.
+
+Examples:
+  bastion license audit .
+  bastion license audit --policy strict
+  bastion license audit ./my-project`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scanPath := "."
+			if len(args) > 0 {
+				scanPath = args[0]
+			}
+
+			return runLicenseAudit(scanPath, policy)
+		},
+	}
+
+	cmd.Flags().StringVarP(&path, "path", "p", ".", "project path to scan")
+	cmd.Flags().StringVarP(&policy, "policy", "", "default", "license policy (strict, default, permissive)")
+
+	return cmd
+}
+
+// Implementation functions (simplified for now - would need full implementation)
+
+func runDependencyCheck(pm, name, version string) error {
+	fmt.Printf("🏰 Bastion Dependency Checker\n")
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("Checking: %s@%s (%s)\n\n", name, version, pm)
+	fmt.Printf("⚠️  Dependency checking not yet fully implemented\n")
+	fmt.Printf("This would check %s %s@%s against vulnerability databases\n", pm, name, version)
+	return nil
+}
+
+func runDependencyVulnerabilities(path, severity string) error {
+	fmt.Printf("🏰 Bastion Dependency Scanner\n")
+	fmt.Printf("📦 Scanning dependencies in: %s\n", path)
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("⚠️  Vulnerability scanning not yet fully implemented\n")
+	fmt.Printf("This would scan dependencies and list vulnerabilities\n")
+	return nil
+}
+
+func runDependencyUpgradePlan(path string) error {
+	fmt.Printf("🏰 Bastion Dependency Upgrade Planner\n")
+	fmt.Printf("📦 Analyzing dependencies in: %s\n", path)
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("⚠️  Upgrade plan generation not yet fully implemented\n")
+	fmt.Printf("This would generate a detailed upgrade plan\n")
+	return nil
+}
+
+func runSBOMGenerate(path, format, output string) error {
+	fmt.Printf("🏰 Bastion SBOM Generator\n")
+	fmt.Printf("📦 Generating SBOM for: %s\n", path)
+	fmt.Printf("Format: %s\n", format)
+	fmt.Printf("Output: %s\n", output)
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("⚠️  SBOM generation not yet fully implemented\n")
+	fmt.Printf("This would generate a %s SBOM\n", format)
+	return nil
+}
+
+func runLicenseAudit(path, policy string) error {
+	fmt.Printf("🏰 Bastion License Auditor\n")
+	fmt.Printf("⚖️  Auditing licenses in: %s\n", path)
+	fmt.Printf("Policy: %s\n", policy)
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("⚠️  License auditing not yet fully implemented\n")
+	fmt.Printf("This would audit dependencies for license compliance\n")
+	return nil
 }
