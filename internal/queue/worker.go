@@ -10,7 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/config"
+	"code-security-auditor/internal/config"
 )
 
 // Worker represents a background job worker.

@@ -11,11 +11,11 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/config"
-	"github.com/code-security-auditor/internal/database"
-	"github.com/code-security-auditor/internal/queue"
-	"github.com/code-security-auditor/internal/scanner"
-	"github.com/code-security-auditor/pkg/logger"
+	"code-security-auditor/internal/config"
+	"code-security-auditor/internal/database"
+	"code-security-auditor/internal/queue"
+	"code-security-auditor/internal/scanner"
+	"code-security-auditor/pkg/logger"
 )
 
 func main() {

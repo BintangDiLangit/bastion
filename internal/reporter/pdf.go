@@ -6,7 +6,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 
-	"github.com/code-security-auditor/internal/models"
+	"code-security-auditor/internal/models"
 )
 
 // PDFGenerator generates PDF reports.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/config"
+	"code-security-auditor/internal/config"
 )
 
 // New creates a new logger based on configuration.

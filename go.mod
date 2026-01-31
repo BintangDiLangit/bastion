@@ -1,6 +1,6 @@
-module github.com/code-security-auditor
+module code-security-auditor
 
-go 1.25.6
+go 1.22
 
 require (
 	// Web Framework

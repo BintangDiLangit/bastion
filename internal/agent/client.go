@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
-	"github.com/code-security-auditor/internal/config"
+	"code-security-auditor/internal/config"
 )
 
 // Client wraps the Google Generative AI client.

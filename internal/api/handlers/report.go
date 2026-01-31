@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/models"
+	"code-security-auditor/internal/models"
 )
 
 // ReportService defines the interface for report operations.

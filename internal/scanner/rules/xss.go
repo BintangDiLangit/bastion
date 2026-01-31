@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/code-security-auditor/internal/models"
-	"github.com/code-security-auditor/internal/scanner"
+	"code-security-auditor/internal/models"
+	"code-security-auditor/internal/scanner"
 )
 
 // XSSRule detects potential Cross-Site Scripting vulnerabilities.

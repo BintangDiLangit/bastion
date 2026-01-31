@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 
-	"github.com/code-security-auditor/internal/models"
+	"code-security-auditor/internal/models"
 )
 
 // GitHubReporter posts scan results to GitHub PRs.
@@ -124,7 +124,7 @@ func (r *GitHubReporter) buildPRComment(data ReportData) string {
 
 	// Footer
 	sb.WriteString("---\n")
-	sb.WriteString("*Scan performed by [Code Security Auditor](https://github.com/code-security-auditor)*")
+	sb.WriteString("*Scan performed by [Code Security Auditor](https://code-security-auditor)*")
 
 	return sb.String()
 }

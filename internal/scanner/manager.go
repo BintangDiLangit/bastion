@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/config"
-	"github.com/code-security-auditor/internal/models"
-	"github.com/code-security-auditor/internal/scanner/rules"
+	"code-security-auditor/internal/config"
+	"code-security-auditor/internal/models"
+	"code-security-auditor/internal/scanner/rules"
 )
 
 // Manager orchestrates the scanning process.

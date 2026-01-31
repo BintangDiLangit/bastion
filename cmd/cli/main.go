@@ -13,11 +13,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/code-security-auditor/internal/config"
-	"github.com/code-security-auditor/internal/models"
-	"github.com/code-security-auditor/internal/scanner"
-	"github.com/code-security-auditor/internal/scanner/rules"
-	"github.com/code-security-auditor/pkg/logger"
+	"code-security-auditor/internal/config"
+	"code-security-auditor/internal/models"
+	"code-security-auditor/internal/scanner"
+	"code-security-auditor/internal/scanner/rules"
+	"code-security-auditor/pkg/logger"
 )
 
 var (

@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/code-security-auditor/internal/models"
-	"github.com/code-security-auditor/internal/scanner"
+	"code-security-auditor/internal/models"
+	"code-security-auditor/internal/scanner"
 )
 
 // DependencyRule detects vulnerable or outdated dependencies.

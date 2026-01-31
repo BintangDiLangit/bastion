@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/models"
+	"code-security-auditor/internal/models"
 )
 
 // Generator generates security reports.
@@ -283,7 +283,7 @@ func (g *Generator) generateSARIF(data ReportData) (*GeneratedReport, error) {
 					Driver: models.SARIFDriver{
 						Name:           "Code Security Auditor",
 						Version:        "1.0.0",
-						InformationURI: "https://github.com/code-security-auditor",
+						InformationURI: "https://code-security-auditor",
 						Rules:          make([]models.SARIFRule, 0),
 					},
 				},

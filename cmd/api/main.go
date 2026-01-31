@@ -12,12 +12,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/code-security-auditor/internal/api"
-	"github.com/code-security-auditor/internal/api/handlers"
-	"github.com/code-security-auditor/internal/config"
-	"github.com/code-security-auditor/internal/database"
-	"github.com/code-security-auditor/internal/scanner/rules"
-	"github.com/code-security-auditor/pkg/logger"
+	"code-security-auditor/internal/api"
+	"code-security-auditor/internal/api/handlers"
+	"code-security-auditor/internal/config"
+	"code-security-auditor/internal/database"
+	"code-security-auditor/internal/scanner/rules"
+	"code-security-auditor/pkg/logger"
 )
 
 func main() {
