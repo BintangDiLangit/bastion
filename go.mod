@@ -1,6 +1,6 @@
 module code-security-auditor
 
-go 1.22
+go 1.23
 
 require (
 	// Web Framework
@@ -8,44 +8,33 @@ require (
 
 	// Git Operations
 	github.com/go-git/go-git/v5 v5.12.0
-	github.com/google/go-github/v57 v57.0.0
-
-	// Static Analysis
-	golang.org/x/tools v0.27.0
-	github.com/securego/gosec/v2 v2.21.4
-	honnef.co/go/tools v0.5.1
-
-	// Database
-	github.com/lib/pq v1.10.9
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/jmoiron/sqlx v1.4.0
-
-	// Configuration
-	github.com/spf13/viper v1.19.0
-	github.com/joho/godotenv v1.5.1
-
-	// Queue (Redis-based)
-	github.com/hibiken/asynq v0.25.0
-
-	// ADK/AI - Google Cloud
-	google.golang.org/api v0.209.0
-	cloud.google.com/go/aiplatform v1.68.0
-	google.golang.org/genai v0.2.0
+	github.com/google/go-github/v57 v57.0.0
 
 	// Utilities
 	github.com/google/uuid v1.6.0
-	github.com/sirupsen/logrus v1.9.3
-	gopkg.in/yaml.v3 v3.0.1
+
+	// Queue (Redis-based)
+	github.com/hibiken/asynq v0.25.0
+	github.com/jmoiron/sqlx v1.4.0
 
 	// PDF Generation
 	github.com/jung-kurt/gofpdf v1.16.2
 
-	// Testing
-	github.com/stretchr/testify v1.9.0
-	github.com/DATA-DOG/go-sqlmock v1.5.2
+	// Database
+	github.com/lib/pq v1.10.9
+	github.com/sirupsen/logrus v1.9.3
 
 	// CLI
 	github.com/spf13/cobra v1.8.1
+
+	// Configuration
+	github.com/spf13/viper v1.19.0
+
+	// Static Analysis
+	golang.org/x/tools v0.28.0 // indirect
+	google.golang.org/genai v0.2.0
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
@@ -53,7 +42,7 @@ require (
 	github.com/bytedance/sonic v1.12.6 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gabriel-vasile/mimetype v1.4.7 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
@@ -74,7 +63,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
@@ -94,4 +82,35 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/protobuf v1.36.0 // indirect
+)
+
+require golang.org/x/oauth2 v0.24.0
+
+require (
+	cloud.google.com/go v0.116.0 // indirect
+	cloud.google.com/go/compute/metadata v0.5.2 // indirect
+	dario.cat/mergo v1.0.0 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/bytedance/sonic/loader v0.2.0 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
+	github.com/cloudwego/base64x v0.1.4 // indirect
+	github.com/cloudwego/iasm v0.2.0 // indirect
+	github.com/cyphar/filepath-securejoin v0.2.5 // indirect
+	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
+	github.com/kevinburke/ssh_config v1.2.0 // indirect
+	github.com/onsi/gomega v1.34.2 // indirect
+	github.com/pjbgf/sha1cd v0.3.0 // indirect
+	github.com/redis/go-redis/v9 v9.7.0 // indirect
+	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/skeema/knownhosts v1.2.2 // indirect
+	github.com/xanzy/ssh-agent v0.3.3 // indirect
+	golang.org/x/mod v0.22.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
