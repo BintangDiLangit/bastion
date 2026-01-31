@@ -58,10 +58,13 @@ hardcoded secrets, vulnerable dependencies, and more.`,
 // scanCmd creates the scan command.
 func scanCmd() *cobra.Command {
 	var (
-		excludePaths []string
-		enableRules  []string
-		maxFiles     int
-		timeout      int
+		excludePaths   []string
+		enableRules    []string
+		maxFiles       int
+		timeout        int
+		failOnCritical bool
+		apiKey         string
+		scanType       string
 	)
 
 	cmd := &cobra.Command{
@@ -92,14 +95,20 @@ Examples:
 			}
 
 			return runScan(path, scanOptions{
-				excludePaths: excludePaths,
-				enableRules:  enableRules,
-				maxFiles:     maxFiles,
-				timeout:      time.Duration(timeout) * time.Minute,
+				excludePaths:   excludePaths,
+				enableRules:    enableRules,
+				maxFiles:       maxFiles,
+				timeout:        time.Duration(timeout) * time.Minute,
+				failOnCritical: failOnCritical,
+				apiKey:         apiKey,
+				scanType:       scanType,
 			})
 		},
 	}
 
+	cmd.Flags().BoolVar(&failOnCritical, "fail-on-critical", true, "fail execution if critical vulnerabilities are found")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for reporting")
+	cmd.Flags().StringVar(&scanType, "scan-type", "full", "scan type (full, quick)")
 	cmd.Flags().StringSliceVarP(&excludePaths, "exclude", "e", nil, "paths to exclude (comma-separated)")
 	cmd.Flags().StringSliceVarP(&enableRules, "rules", "r", nil, "rules to enable (comma-separated)")
 	cmd.Flags().IntVarP(&maxFiles, "max-files", "m", 1000, "maximum files to scan")
@@ -110,10 +119,13 @@ Examples:
 
 // scanOptions holds scan configuration.
 type scanOptions struct {
-	excludePaths []string
-	enableRules  []string
-	maxFiles     int
-	timeout      time.Duration
+	excludePaths   []string
+	enableRules    []string
+	maxFiles       int
+	timeout        time.Duration
+	failOnCritical bool
+	apiKey         string
+	scanType       string
 }
 
 // runScan executes the scan.
@@ -187,11 +199,11 @@ func runScan(path string, opts scanOptions) error {
 	}
 
 	// Output results
-	return outputResults(result, log)
+	return outputResults(result, log, opts)
 }
 
 // outputResults outputs the scan results.
-func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
+func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOptions) error {
 	// Build output
 	scanOut := ScanOutput{
 		ScanID:       uuid.New().String(),
@@ -252,7 +264,8 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
 	printSummary(scanOut.Summary, log)
 
 	// Exit with error code if vulnerabilities found
-	if scanOut.Summary.Critical > 0 || scanOut.Summary.High > 0 {
+	// Exit with error code if vulnerabilities found and fail-on-critical is set
+	if opts.failOnCritical && (scanOut.Summary.Critical > 0 || scanOut.Summary.High > 0) {
 		os.Exit(1)
 	}
 

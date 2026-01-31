@@ -1,0 +1,28 @@
+name: 'Code Security Auditor Scan'
+description: 'Automated security scan for your repository'
+inputs:
+  api-key:
+    description: 'API Key for Code Security Auditor'
+    required: true
+  fail-on-critical:
+    description: 'Fail the build if critical vulnerabilities are found'
+    required: false
+    default: 'true'
+  scan-type:
+    description: 'Type of scan to perform (full, quick)'
+    required: false
+    default: 'full'
+outputs:
+  report-path:
+    description: 'Path to the generated report'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - scan
+    - .
+    - --api-key
+    - ${{ inputs.api-key }}
+    - --fail-on-critical=${{ inputs.fail-on-critical }}
+    - --scan-type
+    - ${{ inputs.scan-type }}
