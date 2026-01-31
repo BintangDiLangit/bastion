@@ -1,75 +1,76 @@
 package sbom
 
 import (
-	"encoding/json"
-	"time"
+	"bytes"
+	"context"
+	"fmt"
 
 	"code-security-auditor/internal/dependency"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/sirupsen/logrus"
 )
 
-// Generator creates SBOMs
-type Generator struct{}
+type SBOMFormat string
 
-func NewGenerator() *Generator {
-	return &Generator{}
+const (
+	CycloneDX SBOMFormat = "cyclonedx"
+	SPDX      SBOMFormat = "spdx"
+)
+
+type OutputType string
+
+const (
+	JSON OutputType = "json"
+	XML  OutputType = "xml"
+)
+
+type SBOMOptions struct {
+	Format                 SBOMFormat
+	OutputType             OutputType
+	IncludeVulnerabilities bool
+	IncludeLicenses        bool
+	IncludeHashes          bool
 }
 
-// TODO: Use actual CycloneDX definitions
-// Minimal structure for demonstration
-type CycloneDX struct {
-	BomFormat   string      `json:"bomFormat"`
-	SpecVersion string      `json:"specVersion"`
-	Version     int         `json:"version"`
-	Metadata    CDXMetadata `json:"metadata"`
-	Components  []Component `json:"components"`
+type Generator struct {
+	logger       *logrus.Logger
+	cdxGenerator *CycloneDXGenerator
 }
 
-type CDXMetadata struct {
-	Timestamp string `json:"timestamp"`
-	Tool      Tool   `json:"tool"`
+func NewGenerator(logger *logrus.Logger) *Generator {
+	return &Generator{
+		logger:       logger,
+		cdxGenerator: NewCycloneDXGenerator(logger),
+	}
 }
 
-type Tool struct {
-	Vendor  string `json:"vendor"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
+// Generate creates an SBOM based on options
+func (g *Generator) Generate(ctx context.Context, manifest *dependency.DependencyManifest, vulnReports []dependency.VulnerabilityReport, opts SBOMOptions) ([]byte, error) {
+	switch opts.Format {
+	case CycloneDX:
+		return g.generateCycloneDX(manifest, vulnReports, opts)
+	case SPDX:
+		return nil, fmt.Errorf("SPDX format not yet implemented")
+	default:
+		// Default to CycloneDX JSON
+		return g.generateCycloneDX(manifest, vulnReports, opts)
+	}
 }
 
-type Component struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Purl    string `json:"purl,omitempty"` // Package URL
-	License string `json:"license,omitempty"`
-}
-
-// GenerateCycloneDXJSON creates a simple CycloneDX 1.4 JSON SBOM
-func (g *Generator) GenerateCycloneDXJSON(manifest *dependency.DependencyManifest) ([]byte, error) {
-	cdx := CycloneDX{
-		BomFormat:   "CycloneDX",
-		SpecVersion: "1.4",
-		Version:     1,
-		Metadata: CDXMetadata{
-			Timestamp: time.Now().Format(time.RFC3339),
-			Tool: Tool{
-				Vendor:  "Bastion",
-				Name:    "Code Security Auditor",
-				Version: "1.0.0",
-			},
-		},
+func (g *Generator) generateCycloneDX(manifest *dependency.DependencyManifest, vulnReports []dependency.VulnerabilityReport, opts SBOMOptions) ([]byte, error) {
+	bom, err := g.cdxGenerator.Generate(manifest, vulnReports)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, dep := range manifest.AllDependencies {
-		comp := Component{
-			Type:    "library",
-			Name:    dep.Name,
-			Version: dep.Version,
-			License: dep.License,
-			// Simplified PURL generation
-			Purl: "pkg:" + string(manifest.PackageManager) + "/" + dep.Name + "@" + dep.Version,
-		}
-		cdx.Components = append(cdx.Components, comp)
+	var buf bytes.Buffer
+	encoder := cyclonedx.NewBOMEncoder(&buf, cyclonedx.BOMFileFormatJSON)
+	encoder.SetPretty(true)
+
+	if err := encoder.Encode(bom); err != nil {
+		return nil, fmt.Errorf("failed to encode CycloneDX SBOM: %w", err)
 	}
 
-	return json.MarshalIndent(cdx, "", "  ")
+	return buf.Bytes(), nil
 }
