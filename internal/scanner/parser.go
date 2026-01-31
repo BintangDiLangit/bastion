@@ -63,34 +63,34 @@ func (p *Parser) RegisterParser(parser LanguageParser) {
 
 // AST represents a parsed abstract syntax tree.
 type AST struct {
-	Language     string            `json:"language"`
-	FilePath     string            `json:"file_path"`
-	Functions    []Function        `json:"functions"`
-	Classes      []Class           `json:"classes"`
-	Imports      []Import          `json:"imports"`
-	Variables    []Variable        `json:"variables"`
-	Comments     []Comment         `json:"comments"`
-	Strings      []StringLiteral   `json:"strings"`
-	CallSites    []CallSite        `json:"call_sites"`
-	Annotations  []Annotation      `json:"annotations,omitempty"`
-	RawAST       interface{}       `json:"-"` // Language-specific AST
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Language    string            `json:"language"`
+	FilePath    string            `json:"file_path"`
+	Functions   []Function        `json:"functions"`
+	Classes     []Class           `json:"classes"`
+	Imports     []Import          `json:"imports"`
+	Variables   []Variable        `json:"variables"`
+	Comments    []Comment         `json:"comments"`
+	Strings     []StringLiteral   `json:"strings"`
+	CallSites   []CallSite        `json:"call_sites"`
+	Annotations []Annotation      `json:"annotations,omitempty"`
+	RawAST      interface{}       `json:"-"` // Language-specific AST
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 // Function represents a function definition.
 type Function struct {
-	Name         string      `json:"name"`
-	Parameters   []Parameter `json:"parameters"`
-	ReturnType   string      `json:"return_type,omitempty"`
-	Body         string      `json:"-"` // Not serialized to JSON
-	LineStart    int         `json:"line_start"`
-	LineEnd      int         `json:"line_end"`
-	Complexity   int         `json:"complexity"`
-	IsExported   bool        `json:"is_exported"`
-	IsAsync      bool        `json:"is_async,omitempty"`
-	Receiver     string      `json:"receiver,omitempty"` // For Go methods
-	DocString    string      `json:"doc_string,omitempty"`
-	Annotations  []string    `json:"annotations,omitempty"`
+	Name        string      `json:"name"`
+	Parameters  []Parameter `json:"parameters"`
+	ReturnType  string      `json:"return_type,omitempty"`
+	Body        string      `json:"-"` // Not serialized to JSON
+	LineStart   int         `json:"line_start"`
+	LineEnd     int         `json:"line_end"`
+	Complexity  int         `json:"complexity"`
+	IsExported  bool        `json:"is_exported"`
+	IsAsync     bool        `json:"is_async,omitempty"`
+	Receiver    string      `json:"receiver,omitempty"` // For Go methods
+	DocString   string      `json:"doc_string,omitempty"`
+	Annotations []string    `json:"annotations,omitempty"`
 }
 
 // Parameter represents a function parameter.
@@ -126,10 +126,10 @@ type Field struct {
 
 // Import represents an import statement.
 type Import struct {
-	Path   string `json:"path"`
-	Alias  string `json:"alias,omitempty"`
-	Line   int    `json:"line"`
-	IsStd  bool   `json:"is_std,omitempty"` // Is standard library
+	Path  string `json:"path"`
+	Alias string `json:"alias,omitempty"`
+	Line  int    `json:"line"`
+	IsStd bool   `json:"is_std,omitempty"` // Is standard library
 }
 
 // Variable represents a variable declaration.
@@ -145,11 +145,11 @@ type Variable struct {
 
 // Comment represents a code comment.
 type Comment struct {
-	Text      string `json:"text"`
-	Line      int    `json:"line"`
-	LineEnd   int    `json:"line_end,omitempty"`
-	IsBlock   bool   `json:"is_block"`
-	IsDoc     bool   `json:"is_doc"`
+	Text    string `json:"text"`
+	Line    int    `json:"line"`
+	LineEnd int    `json:"line_end,omitempty"`
+	IsBlock bool   `json:"is_block"`
+	IsDoc   bool   `json:"is_doc"`
 }
 
 // StringLiteral represents a string literal in code.
@@ -163,12 +163,12 @@ type StringLiteral struct {
 
 // CallSite represents a function/method call.
 type CallSite struct {
-	Name       string   `json:"name"`
-	Receiver   string   `json:"receiver,omitempty"`
-	Arguments  []string `json:"arguments,omitempty"`
-	Line       int      `json:"line"`
-	Column     int      `json:"column"`
-	IsMethod   bool     `json:"is_method"`
+	Name      string   `json:"name"`
+	Receiver  string   `json:"receiver,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
+	Line      int      `json:"line"`
+	Column    int      `json:"column"`
+	IsMethod  bool     `json:"is_method"`
 }
 
 // Annotation represents a code annotation/decorator.
@@ -180,19 +180,31 @@ type Annotation struct {
 
 // ParsedFile represents a parsed source file with additional metadata.
 type ParsedFile struct {
-	Path            string          `json:"path"`
-	Content         []byte          `json:"-"`
-	Lines           []string        `json:"-"`
-	Language        string          `json:"language"`
-	LineCount       int             `json:"line_count"`
-	Size            int64           `json:"size"`
-	AST             *AST            `json:"ast,omitempty"`
-	Functions       []FunctionInfo  `json:"functions,omitempty"`
-	Imports         []ImportInfo    `json:"imports,omitempty"`
-	Strings         []StringLiteral `json:"strings,omitempty"`
+	Path            string           `json:"path"`
+	Content         []byte           `json:"-"`
+	Lines           []string         `json:"-"`
+	Language        string           `json:"language"`
+	LineCount       int              `json:"line_count"`
+	Size            int64            `json:"size"`
+	AST             *AST             `json:"ast,omitempty"`
+	Functions       []FunctionInfo   `json:"functions,omitempty"`
+	Imports         []ImportInfo     `json:"imports,omitempty"`
+	Strings         []StringLiteral  `json:"strings,omitempty"`
 	SecurityMarkers []SecurityMarker `json:"security_markers,omitempty"`
-	Checksum        string          `json:"checksum,omitempty"`
+	Checksum        string           `json:"checksum,omitempty"`
 }
+
+// GetPath returns the file path.
+func (f *ParsedFile) GetPath() string { return f.Path }
+
+// GetLanguage returns the file language.
+func (f *ParsedFile) GetLanguage() string { return f.Language }
+
+// GetLines returns the file lines.
+func (f *ParsedFile) GetLines() []string { return f.Lines }
+
+// GetContent returns the file content.
+func (f *ParsedFile) GetContent() []byte { return f.Content }
 
 // FunctionInfo holds simplified function information.
 type FunctionInfo struct {
@@ -226,7 +238,7 @@ func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedP
 	var files []*ParsedFile
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	
+
 	// Create a semaphore to limit concurrent parsing
 	sem := make(chan struct{}, p.config.MaxConcurrent)
 	if p.config.MaxConcurrent <= 0 {
@@ -648,7 +660,7 @@ func (p *Parser) parsePython(file *ParsedFile) {
 			currentDecorators = nil
 		}
 	}
-	
+
 	_ = currentClass // Silence unused variable
 	_ = currentDecorators
 }
@@ -808,15 +820,15 @@ func (p *Parser) extractStrings(file *ParsedFile, line string, lineNum int) {
 // detectSecurityMarkers identifies security-sensitive code patterns.
 func (p *Parser) detectSecurityMarkers(file *ParsedFile) {
 	securityPatterns := map[string]*regexp.Regexp{
-		"sql_query":    regexp.MustCompile(`(?i)(execute|query|exec)\s*\(`),
-		"exec":         regexp.MustCompile(`(?i)(exec|system|popen|subprocess|spawn)\s*\(`),
-		"eval":         regexp.MustCompile(`(?i)\beval\s*\(`),
-		"shell":        regexp.MustCompile(`(?i)(shell_exec|passthru|backtick)\s*\(`),
-		"file_read":    regexp.MustCompile(`(?i)(readFile|read_file|file_get_contents|open)\s*\(`),
-		"file_write":   regexp.MustCompile(`(?i)(writeFile|write_file|file_put_contents)\s*\(`),
-		"http_request": regexp.MustCompile(`(?i)(fetch|axios|http\.get|requests\.get|curl)\s*\(`),
-		"crypto":       regexp.MustCompile(`(?i)(md5|sha1|encrypt|decrypt)\s*\(`),
-		"auth":         regexp.MustCompile(`(?i)(password|token|secret|api_key|apikey)\s*[=:]`),
+		"sql_query":     regexp.MustCompile(`(?i)(execute|query|exec)\s*\(`),
+		"exec":          regexp.MustCompile(`(?i)(exec|system|popen|subprocess|spawn)\s*\(`),
+		"eval":          regexp.MustCompile(`(?i)\beval\s*\(`),
+		"shell":         regexp.MustCompile(`(?i)(shell_exec|passthru|backtick)\s*\(`),
+		"file_read":     regexp.MustCompile(`(?i)(readFile|read_file|file_get_contents|open)\s*\(`),
+		"file_write":    regexp.MustCompile(`(?i)(writeFile|write_file|file_put_contents)\s*\(`),
+		"http_request":  regexp.MustCompile(`(?i)(fetch|axios|http\.get|requests\.get|curl)\s*\(`),
+		"crypto":        regexp.MustCompile(`(?i)(md5|sha1|encrypt|decrypt)\s*\(`),
+		"auth":          regexp.MustCompile(`(?i)(password|token|secret|api_key|apikey)\s*[=:]`),
 		"serialization": regexp.MustCompile(`(?i)(pickle\.load|unserialize|yaml\.load|deserialize)\s*\(`),
 	}
 
@@ -1062,7 +1074,7 @@ func (p *RubyParser) Parse(ctx context.Context, filePath string, content []byte)
 // GenericParser implements LanguageParser for unknown languages.
 type GenericParser struct{}
 
-func (p *GenericParser) GetLanguage() string        { return "generic" }
+func (p *GenericParser) GetLanguage() string           { return "generic" }
 func (p *GenericParser) SupportsFile(path string) bool { return true }
 func (p *GenericParser) Parse(ctx context.Context, filePath string, content []byte) (*AST, error) {
 	return &AST{Language: "generic", FilePath: filePath}, nil

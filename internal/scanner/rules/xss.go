@@ -1,15 +1,9 @@
 package rules
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/google/uuid"
-
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
 )
 
 // XSSRule detects potential Cross-Site Scripting vulnerabilities.
@@ -22,9 +16,9 @@ func NewXSSRule() *XSSRule {
 	base := NewBaseRule(
 		"xss",
 		"Cross-Site Scripting (XSS)",
-		"Potential cross-site scripting vulnerability detected",
-		models.SeverityHigh,
-		models.CategoryXSS,
+		"Potential XSS vulnerability",
+		SeverityHigh,
+		CategoryXSS,
 	)
 
 	base.SetLanguages([]string{"javascript", "typescript", "html", "php", "python", "go", "java", "ruby"})
@@ -55,62 +49,45 @@ For Python (Django):
   {{ sanitized_content|safe }}
 `)
 
-	base.SetReferences(models.References{
-		CWE:   []string{"CWE-79"},
-		OWASP: []string{"A03:2021"},
-		URLs: []string{
-			"https://owasp.org/www-community/attacks/xss/",
-			"https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
-		},
-	})
+	base.SetReferences([]string{
+		"https://owasp.org/Top10/A03_2021-Injection/",
+		"https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+	},
+	)
 
 	return &XSSRule{BaseRule: base}
 }
 
 // Check implements the Rule interface.
-func (r *XSSRule) Check(ctx context.Context, file *scanner.ParsedFile) ([]models.Vulnerability, error) {
-	var vulns []models.Vulnerability
+func (r *XSSRule) Check(file ParsedFile) []Finding {
+	var vulns []Finding
 
-	patterns := r.getPatterns(file.Language)
-
-	for i, line := range file.Lines {
+	for i, line := range file.GetLines() {
 		lineNum := i + 1
 
+		patterns := r.getPatterns(file.GetLanguage())
 		for _, pattern := range patterns {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
-
 			if pattern.regex.MatchString(line) {
-				// Additional context check
-				if r.isLikelyVulnerable(line, file.Language) {
-					vuln := models.Vulnerability{
-						ID:          uuid.New(),
-						RuleID:      r.ID(),
-						Title:       r.Name(),
-						Description: fmt.Sprintf("%s: %s", r.Description(), pattern.description),
-						Severity:    r.Severity(),
-						Category:    r.Category(),
-						FilePath:    file.Path,
-						LineStart:   lineNum,
-						LineEnd:     lineNum,
-						CodeSnippet: getCodeSnippet(file.Lines, lineNum, 3),
-						Remediation: r.remediation,
-						References:  r.references,
-						Confidence:  pattern.confidence,
-						Metadata: models.VulnMetadata{
-							Language: file.Language,
-						},
-					}
-					vulns = append(vulns, vuln)
+				vuln := Finding{
+					RuleID:      r.ID(),
+					Title:       r.Name(),
+					Description: fmt.Sprintf("Potential XSS detected: %s", strings.TrimSpace(line)),
+					Severity:    string(r.GetSeverity()),
+					Category:    string(r.GetCategory()),
+					FilePath:    file.GetPath(),
+					Line:        lineNum,
+					CodeSnippet: getCodeSnippet(file.GetLines(), lineNum, 2),
+					Remediation: r.remediation,
+					CWE:         "CWE-79",
+					Confidence:  0.8,
+					References:  r.GetReferences(),
 				}
+				vulns = append(vulns, vuln)
 			}
 		}
 	}
 
-	return vulns, nil
+	return vulns
 }
 
 type xssPattern struct {

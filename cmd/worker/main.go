@@ -27,7 +27,7 @@ func main() {
 	}
 
 	// Initialize logger
-	log := logger.New(cfg.Logger)
+	log := logger.New(cfg.Logging)
 	log.Info("Starting Code Security Auditor Worker")
 
 	// Initialize database

@@ -8,9 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"code-security-auditor/internal/api"
 	"code-security-auditor/internal/api/handlers"
@@ -29,7 +26,7 @@ func main() {
 	}
 
 	// Initialize logger
-	log := logger.New(cfg.Logger)
+	log := logger.New(cfg.Logging)
 	log.Info("Starting Code Security Auditor API Server")
 
 	// Initialize database
@@ -52,7 +49,7 @@ func main() {
 	defer redis.Close()
 
 	// Initialize rule engine
-	ruleEngine := rules.NewEngine(log)
+	ruleEngine := rules.NewEngine(cfg.Scanner, log)
 	ruleEngine.Register(rules.NewSQLInjectionRule())
 	ruleEngine.Register(rules.NewXSSRule())
 	ruleEngine.Register(rules.NewSecretsRule())

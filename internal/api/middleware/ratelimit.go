@@ -37,8 +37,8 @@ func RateLimiter(config RateLimiterConfig) gin.HandlerFunc {
 		if !allowed {
 			c.Header("Retry-After", intToStr(int(time.Until(resetAt).Seconds())))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":      "Too Many Requests",
-				"message":    "Rate limit exceeded",
+				"error":       "Too Many Requests",
+				"message":     "Rate limit exceeded",
 				"retry_after": time.Until(resetAt).Seconds(),
 			})
 			return
@@ -57,9 +57,9 @@ type tokenBucketLimiter struct {
 
 // bucket represents a token bucket for a single client.
 type bucket struct {
-	tokens    int
-	lastFill  time.Time
-	resetAt   time.Time
+	tokens   int
+	lastFill time.Time
+	resetAt  time.Time
 }
 
 func newTokenBucketLimiter(config RateLimiterConfig) *tokenBucketLimiter {
@@ -129,9 +129,9 @@ func intToStr(i int) string {
 
 // SlidingWindowLimiter implements sliding window rate limiting.
 type SlidingWindowLimiter struct {
-	config   RateLimiterConfig
-	windows  map[string]*slidingWindow
-	mu       sync.Mutex
+	config  RateLimiterConfig
+	windows map[string]*slidingWindow
+	mu      sync.Mutex
 }
 
 type slidingWindow struct {
@@ -177,24 +177,6 @@ func (l *SlidingWindowLimiter) Allow(clientID string) bool {
 	// Add new timestamp
 	w.timestamps = append(w.timestamps, now)
 	return true
-}
-
-// CORS returns CORS middleware.
-func CORS() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, X-Request-ID, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
-		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	}
 }
 
 // Timeout adds request timeout middleware.

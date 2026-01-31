@@ -2,15 +2,9 @@ package rules
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/google/uuid"
-
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
 )
 
 // DependencyRule detects vulnerable or outdated dependencies.
@@ -25,7 +19,7 @@ type VulnerableDependency struct {
 	VulnerableRange string // Semver range
 	FixedVersion    string
 	CVE             string
-	Severity        models.Severity
+	Severity        Severity
 	Description     string
 }
 
@@ -35,8 +29,8 @@ func NewDependencyRule() *DependencyRule {
 		"dependency",
 		"Vulnerable Dependency",
 		"Potentially vulnerable dependency detected",
-		models.SeverityHigh,
-		models.CategoryDependency,
+		SeverityHigh,
+		CategoryDependency,
 	)
 
 	base.SetLanguages([]string{}) // Check dependency files for all languages
@@ -67,13 +61,10 @@ Best Practices:
 5. Run tests after updating dependencies
 `)
 
-	base.SetReferences(models.References{
-		CWE:   []string{"CWE-1104"},
-		OWASP: []string{"A06:2021"},
-		URLs: []string{
-			"https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/",
-		},
-	})
+	base.SetReferences([]string{
+		"https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/",
+	},
+	)
 
 	rule := &DependencyRule{
 		BaseRule:             base,
@@ -99,7 +90,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<4.17.21",
 				FixedVersion:    "4.17.21",
 				CVE:             "CVE-2021-23337",
-				Severity:        models.SeverityHigh,
+				Severity:        SeverityHigh,
 				Description:     "Command Injection vulnerability",
 			},
 		},
@@ -109,7 +100,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<1.2.6",
 				FixedVersion:    "1.2.6",
 				CVE:             "CVE-2021-44906",
-				Severity:        models.SeverityCritical,
+				Severity:        SeverityCritical,
 				Description:     "Prototype Pollution",
 			},
 		},
@@ -119,7 +110,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<0.21.2",
 				FixedVersion:    "0.21.2",
 				CVE:             "CVE-2021-3749",
-				Severity:        models.SeverityHigh,
+				Severity:        SeverityHigh,
 				Description:     "Server-Side Request Forgery",
 			},
 		},
@@ -129,7 +120,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<4.19.0",
 				FixedVersion:    "4.19.0",
 				CVE:             "CVE-2024-29041",
-				Severity:        models.SeverityMedium,
+				Severity:        SeverityMedium,
 				Description:     "Open Redirect vulnerability",
 			},
 		},
@@ -140,7 +131,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<4.2.11",
 				FixedVersion:    "4.2.11",
 				CVE:             "CVE-2024-27351",
-				Severity:        models.SeverityHigh,
+				Severity:        SeverityHigh,
 				Description:     "Potential denial-of-service in intcomma filter",
 			},
 		},
@@ -150,7 +141,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<2.31.0",
 				FixedVersion:    "2.31.0",
 				CVE:             "CVE-2023-32681",
-				Severity:        models.SeverityMedium,
+				Severity:        SeverityMedium,
 				Description:     "Information disclosure vulnerability",
 			},
 		},
@@ -160,7 +151,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<2.3.2",
 				FixedVersion:    "2.3.2",
 				CVE:             "CVE-2023-30861",
-				Severity:        models.SeverityHigh,
+				Severity:        SeverityHigh,
 				Description:     "Possible disclosure of permanent session cookie",
 			},
 		},
@@ -171,7 +162,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<0.17.0",
 				FixedVersion:    "0.17.0",
 				CVE:             "CVE-2023-48795",
-				Severity:        models.SeverityMedium,
+				Severity:        SeverityMedium,
 				Description:     "SSH handshake prefix truncation attack",
 			},
 		},
@@ -182,7 +173,7 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 				VulnerableRange: "<7.0.8",
 				FixedVersion:    "7.0.8",
 				CVE:             "CVE-2023-38037",
-				Severity:        models.SeverityMedium,
+				Severity:        SeverityMedium,
 				Description:     "Possible ReDoS in block_format",
 			},
 		},
@@ -190,13 +181,13 @@ func (r *DependencyRule) initKnownVulnerabilities() {
 }
 
 // Check implements the Rule interface.
-func (r *DependencyRule) Check(ctx context.Context, file *scanner.ParsedFile) ([]models.Vulnerability, error) {
-	var vulns []models.Vulnerability
+func (r *DependencyRule) Check(file ParsedFile) []Finding {
+	var vulns []Finding
 
 	// Check if this is a dependency file
-	depType := r.detectDependencyFile(file.Path)
+	depType := r.detectDependencyFile(file.GetPath())
 	if depType == "" {
-		return vulns, nil
+		return vulns
 	}
 
 	// Parse dependencies based on file type
@@ -204,42 +195,22 @@ func (r *DependencyRule) Check(ctx context.Context, file *scanner.ParsedFile) ([
 
 	// Check each dependency against known vulnerabilities
 	for _, dep := range deps {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
 		if knownVulns, exists := r.knownVulnerabilities[dep.Name]; exists {
 			for _, kv := range knownVulns {
 				if r.isVersionVulnerable(dep.Version, kv.VulnerableRange) {
-					vuln := models.Vulnerability{
-						ID:          uuid.New(),
+					vuln := Finding{
 						RuleID:      r.ID(),
 						Title:       fmt.Sprintf("Vulnerable dependency: %s", dep.Name),
 						Description: fmt.Sprintf("%s version %s is vulnerable to %s: %s", dep.Name, dep.Version, kv.CVE, kv.Description),
-						Severity:    kv.Severity,
-						Category:    r.Category(),
-						FilePath:    file.Path,
-						LineStart:   dep.Line,
-						LineEnd:     dep.Line,
-						CodeSnippet: getCodeSnippet(file.Lines, dep.Line, 2),
+						Severity:    string(kv.Severity),
+						Category:    string(r.GetCategory()),
+						FilePath:    file.GetPath(),
+						Line:        dep.Line,
+						CodeSnippet: getCodeSnippet(file.GetLines(), dep.Line, 2),
 						Remediation: fmt.Sprintf("Update %s to version %s or later.\n\n%s", dep.Name, kv.FixedVersion, r.remediation),
-						References: models.References{
-							CVE:   []string{kv.CVE},
-							CWE:   r.references.CWE,
-							OWASP: r.references.OWASP,
-							URLs:  r.references.URLs,
-						},
-						Confidence: 0.9,
-						Metadata: models.VulnMetadata{
-							Language: depType,
-							Tags:     []string{kv.CVE},
-							CustomFields: map[string]string{
-								"current_version": dep.Version,
-								"fixed_version":   kv.FixedVersion,
-							},
-						},
+						CWE:         "CWE-1104",
+						Confidence:  0.9,
+						References:  r.GetReferences(),
 					}
 					vulns = append(vulns, vuln)
 				}
@@ -247,7 +218,7 @@ func (r *DependencyRule) Check(ctx context.Context, file *scanner.ParsedFile) ([
 		}
 	}
 
-	return vulns, nil
+	return vulns
 }
 
 // detectDependencyFile identifies the type of dependency file.
@@ -304,7 +275,7 @@ type Dependency struct {
 }
 
 // parseDependencies parses dependencies from a file.
-func (r *DependencyRule) parseDependencies(file *scanner.ParsedFile, depType string) []Dependency {
+func (r *DependencyRule) parseDependencies(file ParsedFile, depType string) []Dependency {
 	switch depType {
 	case "javascript":
 		return r.parseJavaScriptDeps(file)
@@ -320,14 +291,14 @@ func (r *DependencyRule) parseDependencies(file *scanner.ParsedFile, depType str
 }
 
 // parseJavaScriptDeps parses package.json dependencies.
-func (r *DependencyRule) parseJavaScriptDeps(file *scanner.ParsedFile) []Dependency {
+func (r *DependencyRule) parseJavaScriptDeps(file ParsedFile) []Dependency {
 	var deps []Dependency
 
 	// Simple regex-based parsing
 	depPattern := regexp.MustCompile(`"([^"]+)"\s*:\s*"([^"]+)"`)
 
 	inDeps := false
-	for i, line := range file.Lines {
+	for i, line := range file.GetLines() {
 		trimmed := strings.TrimSpace(line)
 
 		// Track if we're in dependencies section
@@ -361,14 +332,14 @@ func (r *DependencyRule) parseJavaScriptDeps(file *scanner.ParsedFile) []Depende
 }
 
 // parseGoDeps parses go.mod dependencies.
-func (r *DependencyRule) parseGoDeps(file *scanner.ParsedFile) []Dependency {
+func (r *DependencyRule) parseGoDeps(file ParsedFile) []Dependency {
 	var deps []Dependency
 
 	// Parse require statements
 	requirePattern := regexp.MustCompile(`^\s*([^\s]+)\s+v?([0-9][^\s]*)`)
 	inRequire := false
 
-	for i, line := range file.Lines {
+	for i, line := range file.GetLines() {
 		trimmed := strings.TrimSpace(line)
 
 		if strings.HasPrefix(trimmed, "require (") {
@@ -410,12 +381,12 @@ func (r *DependencyRule) parseGoDeps(file *scanner.ParsedFile) []Dependency {
 }
 
 // parsePythonDeps parses requirements.txt dependencies.
-func (r *DependencyRule) parsePythonDeps(file *scanner.ParsedFile) []Dependency {
+func (r *DependencyRule) parsePythonDeps(file ParsedFile) []Dependency {
 	var deps []Dependency
 
 	reqPattern := regexp.MustCompile(`^([a-zA-Z0-9_-]+)\s*(?:==|>=|<=|~=|>|<)\s*([0-9][^\s;#]*)`)
 
-	sc := bufio.NewScanner(strings.NewReader(string(file.Content)))
+	sc := bufio.NewScanner(strings.NewReader(string(file.GetContent())))
 	lineNum := 0
 
 	for sc.Scan() {
@@ -442,12 +413,12 @@ func (r *DependencyRule) parsePythonDeps(file *scanner.ParsedFile) []Dependency 
 }
 
 // parseRubyDeps parses Gemfile dependencies.
-func (r *DependencyRule) parseRubyDeps(file *scanner.ParsedFile) []Dependency {
+func (r *DependencyRule) parseRubyDeps(file ParsedFile) []Dependency {
 	var deps []Dependency
 
 	gemPattern := regexp.MustCompile(`gem\s+['"]([^'"]+)['"](?:,\s*['"]([^'"]+)['"])?`)
 
-	for i, line := range file.Lines {
+	for i, line := range file.GetLines() {
 		trimmed := strings.TrimSpace(line)
 
 		// Skip comments

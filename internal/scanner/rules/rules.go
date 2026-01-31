@@ -2,14 +2,13 @@
 package rules
 
 import (
+	"code-security-auditor/internal/config"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
-
-	"code-security-auditor/internal/config"
 )
 
 // Severity represents the severity level of a finding.
@@ -27,19 +26,19 @@ const (
 type Category string
 
 const (
-	CategorySQLInjection         Category = "sql_injection"
-	CategoryXSS                  Category = "xss"
-	CategorySecrets              Category = "secrets"
-	CategoryDependency           Category = "dependency"
-	CategoryPathTraversal        Category = "path_traversal"
-	CategoryCommandInjection     Category = "command_injection"
-	CategorySSRF                 Category = "ssrf"
+	CategorySQLInjection            Category = "sql_injection"
+	CategoryXSS                     Category = "xss"
+	CategorySecrets                 Category = "secrets"
+	CategoryDependency              Category = "dependency"
+	CategoryPathTraversal           Category = "path_traversal"
+	CategoryCommandInjection        Category = "command_injection"
+	CategorySSRF                    Category = "ssrf"
 	CategoryInsecureDeserialization Category = "insecure_deserialization"
-	CategoryWeakCrypto           Category = "weak_crypto"
-	CategoryInsecureRandom       Category = "insecure_random"
-	CategoryHardcodedCredentials Category = "hardcoded_credentials"
-	CategoryMisconfiguration     Category = "misconfiguration"
-	CategoryCodeQuality          Category = "code_quality"
+	CategoryWeakCrypto              Category = "weak_crypto"
+	CategoryInsecureRandom          Category = "insecure_random"
+	CategoryHardcodedCredentials    Category = "hardcoded_credentials"
+	CategoryMisconfiguration        Category = "misconfiguration"
+	CategoryCodeQuality             Category = "code_quality"
 )
 
 // Finding represents a security or code quality finding from rules.
@@ -116,8 +115,8 @@ type PatternRule struct {
 	Exclude     *regexp.Regexp
 }
 
-// NewRuleEngine creates a new RuleEngine.
-func NewRuleEngine(cfg config.ScannerConfig, logger *logrus.Logger) *RuleEngine {
+// NewEngine creates a new RuleEngine.
+func NewEngine(cfg config.ScannerConfig, logger *logrus.Logger) *RuleEngine {
 	engine := &RuleEngine{
 		rules:        make(map[string]Rule),
 		patterns:     make([]*PatternRule, 0),
@@ -455,6 +454,7 @@ type BaseRule struct {
 	category    Category
 	languages   []string
 	remediation string
+	references  []string
 }
 
 // NewBaseRule creates a new BaseRule.
@@ -495,6 +495,15 @@ func (r *BaseRule) SetLanguages(langs []string) *BaseRule {
 // SetRemediation sets the remediation text.
 func (r *BaseRule) SetRemediation(text string) *BaseRule {
 	r.remediation = text
+	return r
+}
+
+// GetReferences returns the references.
+func (r *BaseRule) GetReferences() []string { return r.references }
+
+// SetReferences sets the references.
+func (r *BaseRule) SetReferences(refs []string) *BaseRule {
+	r.references = refs
 	return r
 }
 

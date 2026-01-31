@@ -11,7 +11,7 @@ import (
 )
 
 // New creates a new logger based on configuration.
-func New(cfg config.LoggerConfig) *logrus.Logger {
+func New(cfg config.LoggingConfig) *logrus.Logger {
 	log := logrus.New()
 
 	// Set log level

@@ -1,15 +1,9 @@
 package rules
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/google/uuid"
-
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
 )
 
 // SQLInjectionRule detects potential SQL injection vulnerabilities.
@@ -22,9 +16,9 @@ func NewSQLInjectionRule() *SQLInjectionRule {
 	base := NewBaseRule(
 		"sql_injection",
 		"SQL Injection",
-		"Potential SQL injection vulnerability detected",
-		models.SeverityCritical,
-		models.CategoryInjection,
+		"Potential SQL injection vulnerability",
+		SeverityCritical,
+		CategorySQLInjection,
 	)
 
 	base.SetLanguages([]string{"go", "python", "javascript", "typescript", "java", "php", "ruby", "csharp"})
@@ -45,62 +39,46 @@ For Java:
   stmt.setInt(1, userId);
 `)
 
-	base.SetReferences(models.References{
-		CWE:   []string{"CWE-89"},
-		OWASP: []string{"A03:2021"},
-		URLs: []string{
-			"https://owasp.org/www-community/attacks/SQL_Injection",
-			"https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
-		},
-	})
+	base.SetReferences([]string{
+		"https://owasp.org/Top10/A03_2021-Injection/",
+		"https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+	},
+	)
 
-	return &SQLInjectionRule{BaseRule: base}
+	rule := &SQLInjectionRule{BaseRule: base}
+	return rule
 }
 
 // Check implements the Rule interface.
-func (r *SQLInjectionRule) Check(ctx context.Context, file *scanner.ParsedFile) ([]models.Vulnerability, error) {
-	var vulns []models.Vulnerability
+func (r *SQLInjectionRule) Check(file ParsedFile) []Finding {
+	var vulns []Finding
 
-	patterns := r.getPatterns(file.Language)
-
-	for i, line := range file.Lines {
+	for i, line := range file.GetLines() {
 		lineNum := i + 1
 
+		patterns := r.getPatterns(file.GetLanguage())
 		for _, pattern := range patterns {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
-
-			if pattern.regex.MatchString(line) {
-				// Additional context check to reduce false positives
-				if r.isLikelyVulnerable(line, file.Language) {
-					vuln := models.Vulnerability{
-						ID:          uuid.New(),
-						RuleID:      r.ID(),
-						Title:       r.Name(),
-						Description: fmt.Sprintf("%s: %s", r.Description(), pattern.description),
-						Severity:    r.Severity(),
-						Category:    r.Category(),
-						FilePath:    file.Path,
-						LineStart:   lineNum,
-						LineEnd:     lineNum,
-						CodeSnippet: getCodeSnippet(file.Lines, lineNum, 3),
-						Remediation: r.remediation,
-						References:  r.references,
-						Confidence:  pattern.confidence,
-						Metadata: models.VulnMetadata{
-							Language: file.Language,
-						},
-					}
-					vulns = append(vulns, vuln)
+			if pattern.regex.MatchString(line) { // Changed to pattern.regex.MatchString
+				vuln := Finding{
+					RuleID:      r.ID(),
+					Title:       r.Name(),
+					Description: fmt.Sprintf("Potential SQL injection detected: %s", strings.TrimSpace(line)),
+					Severity:    string(r.GetSeverity()),
+					Category:    string(r.GetCategory()),
+					FilePath:    file.GetPath(),
+					Line:        lineNum,
+					CodeSnippet: getCodeSnippet(file.GetLines(), lineNum, 2),
+					Remediation: r.remediation,
+					CWE:         "CWE-89",
+					Confidence:  0.8,
+					References:  r.GetReferences(),
 				}
+				vulns = append(vulns, vuln)
 			}
 		}
 	}
 
-	return vulns, nil
+	return vulns
 }
 
 type sqlPattern struct {
@@ -285,10 +263,10 @@ func (r *SQLInjectionRule) isLikelyVulnerable(line, language string) bool {
 	safePatterns := []string{
 		// Go
 		"$1", "$2", "$3", // PostgreSQL placeholders
-		"?",              // MySQL placeholders
+		"?", // MySQL placeholders
 		// Python
-		"%s,",   // Proper parameterized query
-		"%(", // Named parameters
+		"%s,", // Proper parameterized query
+		"%(",  // Named parameters
 		// General
 		":param", ":id", ":name", // Named parameters
 	}

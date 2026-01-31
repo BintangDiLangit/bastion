@@ -49,10 +49,10 @@ const (
 // Manager orchestrates the scanning process (basic manager).
 type Manager struct {
 	config     config.ScannerConfig
-	gitOps     *GitOperations
+	gitOps     *GitManager
 	parser     *Parser
 	analyzer   *Analyzer
-	ruleEngine *rules.Engine
+	ruleEngine *rules.RuleEngine
 	logger     *logrus.Logger
 }
 
@@ -62,7 +62,7 @@ func NewManager(
 	gitCfg config.GitConfig,
 	logger *logrus.Logger,
 ) *Manager {
-	ruleEngine := rules.NewEngine(logger)
+	ruleEngine := rules.NewEngine(scannerCfg, logger)
 
 	// Register default rules
 	ruleEngine.Register(rules.NewSQLInjectionRule())
@@ -72,7 +72,7 @@ func NewManager(
 
 	return &Manager{
 		config:     scannerCfg,
-		gitOps:     NewGitOperations(gitCfg, logger),
+		gitOps:     mustNewGitManager(gitCfg, logger),
 		parser:     NewParser(scannerCfg, logger),
 		analyzer:   NewAnalyzer(scannerCfg, logger),
 		ruleEngine: ruleEngine,
@@ -158,9 +158,11 @@ type ScanOptions struct {
 	UseADKAnalysis bool     `json:"use_adk_analysis"`
 	GenerateReport bool     `json:"generate_report"`
 	PostToGitHub   bool     `json:"post_to_github"`
-	ExcludedPaths  []string `json:"excluded_paths,omitempty"`
 	MaxFiles       int      `json:"max_files,omitempty"`
+	ExcludedPaths  []string `json:"excluded_paths,omitempty"`
 	Timeout        time.Duration
+	Branch         string `json:"branch,omitempty"`
+	CommitSHA      string `json:"commit_sha,omitempty"`
 }
 
 // EnhancedScanResult holds the comprehensive result of a scan.
@@ -342,12 +344,12 @@ func (sm *ScanManager) ExecuteScan(ctx context.Context, req *ScanRequest) (*Enha
 	// Step 2: Create scan record if not provided
 	if req.Scan == nil {
 		req.Scan = &models.Scan{
-			ID:          scanID,
-			Status:      models.ScanStatusRunning,
-			Type:        models.ScanTypeFull,
-			TriggerType: models.ScanTriggerManual,
-			Branch:      req.Branch,
-			CommitSHA:   req.CommitSHA,
+			ID:        scanID,
+			Status:    models.ScanStatusRunning,
+			Type:      models.ScanTypeFull,
+			Trigger:   models.ScanTriggerManual,
+			Branch:    req.Branch,
+			CommitSHA: req.CommitSHA,
 		}
 	}
 
@@ -383,7 +385,7 @@ func (sm *ScanManager) ExecuteScan(ctx context.Context, req *ScanRequest) (*Enha
 	// Step 7: Calculate metrics
 	tracker.Update(ScanPhaseAnalyzing, 60, "Calculating metrics")
 	metrics := sm.manager.analyzer.CalculateMetrics(files)
-	result.Metrics = &metrics
+	result.Metrics = metrics
 
 	// Step 8: Send to ADK for intelligent analysis (if enabled)
 	if req.Options.UseADKAnalysis && sm.adkClient != nil && len(vulns) > 0 {
@@ -450,7 +452,15 @@ func (sm *ScanManager) cloneRepository(ctx context.Context, req *ScanRequest) (s
 		repoURL = req.Repository.CloneURL
 	}
 
-	return sm.manager.gitOps.Clone(ctx, repoURL, req.Branch, req.CommitSHA)
+	result, err := sm.manager.gitOps.Clone(ctx, CloneOptions{
+		URL:       repoURL,
+		Branch:    req.Branch,
+		CommitSHA: req.CommitSHA,
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.Path, nil
 }
 
 // parseFiles parses files in the repository.
@@ -489,7 +499,7 @@ func (sm *ScanManager) analyzeFilesConcurrent(
 	)
 
 	// Create worker pool
-	workers := sm.config.ConcurrentWorkers
+	workers := sm.config.MaxConcurrent
 	if workers == 0 {
 		workers = 4
 	}
@@ -525,22 +535,10 @@ func (sm *ScanManager) analyzeFilesConcurrent(
 				tracker.UpdateFile(file.Path, processed, len(files))
 
 				// Run rules on file
-				fileVulns, err := sm.manager.ruleEngine.Analyze(ctx, file, enabledRules)
-				if err != nil {
-					mu.Lock()
-					errors = append(errors, ScanError{
-						File:    file.Path,
-						Message: err.Error(),
-						Phase:   "analysis",
-					})
-					mu.Unlock()
-					continue
-				}
+				fileFindings := sm.manager.ruleEngine.Analyze(file)
 
-				// Add scan ID to vulnerabilities
-				for i := range fileVulns {
-					fileVulns[i].ScanID = scanID
-				}
+				// Convert Findings to Vulnerabilities
+				fileVulns := convertFindingsToVulnerabilities(fileFindings, scanID)
 
 				mu.Lock()
 				vulns = append(vulns, fileVulns...)
@@ -649,16 +647,21 @@ func (m *Manager) Scan(ctx context.Context, repo *models.Repository, scan *model
 	// Apply timeout
 	timeout := opts.Timeout
 	if timeout == 0 {
-		timeout = m.config.ScanTimeout
+		timeout = m.config.Timeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// Clone repository
-	clonePath, err := m.gitOps.Clone(ctx, repo.CloneURL, opts.Branch, opts.CommitSHA)
+	cloneResult, err := m.gitOps.Clone(ctx, CloneOptions{
+		URL:       repo.CloneURL,
+		Branch:    opts.Branch,
+		CommitSHA: opts.CommitSHA,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
+	clonePath := cloneResult.Path
 	defer m.cleanup(clonePath)
 
 	// Parse files
@@ -692,7 +695,8 @@ func (m *Manager) Scan(ctx context.Context, repo *models.Repository, scan *model
 	result.Errors = errors
 
 	// Calculate metrics
-	result.Metrics = m.analyzer.CalculateMetrics(files)
+	metrics := m.analyzer.CalculateMetrics(files)
+	result.Metrics = *metrics
 
 	result.Duration = time.Since(startTime)
 
@@ -741,7 +745,8 @@ func (m *Manager) ScanPath(ctx context.Context, scanID uuid.UUID, path string, o
 	result.Errors = errors
 
 	// Calculate metrics
-	result.Metrics = m.analyzer.CalculateMetrics(files)
+	metrics := m.analyzer.CalculateMetrics(files)
+	result.Metrics = *metrics
 
 	result.Duration = time.Since(startTime)
 
@@ -758,7 +763,7 @@ func (m *Manager) analyzeFiles(ctx context.Context, scanID uuid.UUID, files []*P
 	)
 
 	// Create worker pool
-	workers := m.config.ConcurrentWorkers
+	workers := m.config.MaxConcurrent
 	if workers == 0 {
 		workers = 4
 	}
@@ -781,22 +786,8 @@ func (m *Manager) analyzeFiles(ctx context.Context, scanID uuid.UUID, files []*P
 				}
 
 				// Run rules on file
-				fileVulns, err := m.ruleEngine.Analyze(ctx, file, enabledRules)
-				if err != nil {
-					mu.Lock()
-					errors = append(errors, ScanError{
-						File:    file.Path,
-						Message: err.Error(),
-						Phase:   "analysis",
-					})
-					mu.Unlock()
-					continue
-				}
-
-				// Add scan ID to vulnerabilities
-				for i := range fileVulns {
-					fileVulns[i].ScanID = scanID
-				}
+				fileFindings := m.ruleEngine.Analyze(file)
+				fileVulns := convertFindingsToVulnerabilities(fileFindings, scanID)
 
 				mu.Lock()
 				vulns = append(vulns, fileVulns...)
@@ -853,10 +844,15 @@ func (m *Manager) ScanWithProgress(ctx context.Context, repo *models.Repository,
 	callback(Progress{Phase: "cloning", Progress: 0, Message: "Cloning repository..."})
 
 	// Clone repository
-	clonePath, err := m.gitOps.Clone(ctx, repo.CloneURL, opts.Branch, opts.CommitSHA)
+	cloneResult, err := m.gitOps.Clone(ctx, CloneOptions{
+		URL:       repo.CloneURL,
+		Branch:    opts.Branch,
+		CommitSHA: opts.CommitSHA,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
+	clonePath := cloneResult.Path
 	defer m.cleanup(clonePath)
 
 	callback(Progress{Phase: "parsing", Progress: 10, Message: "Parsing files..."})
@@ -880,7 +876,6 @@ func (m *Manager) ScanWithProgress(ctx context.Context, repo *models.Repository,
 	}
 
 	// Analyze with progress
-	enabledRules := m.getEnabledRules(opts)
 	for i, file := range files {
 		select {
 		case <-ctx.Done():
@@ -888,19 +883,10 @@ func (m *Manager) ScanWithProgress(ctx context.Context, repo *models.Repository,
 		default:
 		}
 
-		fileVulns, err := m.ruleEngine.Analyze(ctx, file, enabledRules)
-		if err != nil {
-			result.Errors = append(result.Errors, ScanError{
-				File:    file.Path,
-				Message: err.Error(),
-				Phase:   "analysis",
-			})
-			continue
-		}
+		// Run rules on file
+		fileFindings := m.ruleEngine.Analyze(file)
+		fileVulns := convertFindingsToVulnerabilities(fileFindings, scan.ID)
 
-		for j := range fileVulns {
-			fileVulns[j].ScanID = scan.ID
-		}
 		result.Vulnerabilities = append(result.Vulnerabilities, fileVulns...)
 
 		progress := 30 + (float64(i+1) / float64(len(files)) * 60)
@@ -915,7 +901,8 @@ func (m *Manager) ScanWithProgress(ctx context.Context, repo *models.Repository,
 
 	callback(Progress{Phase: "complete", Progress: 100, Message: "Scan complete"})
 
-	result.Metrics = m.analyzer.CalculateMetrics(files)
+	metrics := m.analyzer.CalculateMetrics(files)
+	result.Metrics = *metrics
 	return result, nil
 }
 

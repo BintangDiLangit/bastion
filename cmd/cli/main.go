@@ -17,7 +17,6 @@ import (
 	"code-security-auditor/internal/models"
 	"code-security-auditor/internal/scanner"
 	"code-security-auditor/internal/scanner/rules"
-	"code-security-auditor/pkg/logger"
 )
 
 var (
@@ -151,8 +150,8 @@ func runScan(path string, opts scanOptions) error {
 	cfg := config.ScannerConfig{
 		MaxFileSize:        1048576, // 1MB
 		MaxFilesPerScan:    opts.maxFiles,
-		ScanTimeout:        opts.timeout,
-		ConcurrentWorkers:  4,
+		Timeout:            opts.timeout,
+		MaxConcurrent:      4,
 		ExcludedPaths:      append(defaultExcludedPaths(), opts.excludePaths...),
 		ExcludedExtensions: defaultExcludedExtensions(),
 	}
@@ -162,7 +161,7 @@ func runScan(path string, opts scanOptions) error {
 	}
 
 	gitCfg := config.GitConfig{
-		CloneDir:     os.TempDir(),
+		TempDir:      os.TempDir(),
 		CloneTimeout: 5 * time.Minute,
 	}
 
@@ -181,6 +180,7 @@ func runScan(path string, opts scanOptions) error {
 		ExcludedPaths: opts.excludePaths,
 		MaxFiles:      opts.maxFiles,
 		Timeout:       opts.timeout,
+		Branch:        "main", // Default branch for local scan if needed, though ScanPath handles local
 	})
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
@@ -193,7 +193,7 @@ func runScan(path string, opts scanOptions) error {
 // outputResults outputs the scan results.
 func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
 	// Build output
-	output := ScanOutput{
+	scanOut := ScanOutput{
 		ScanID:       uuid.New().String(),
 		Timestamp:    time.Now().UTC(),
 		Duration:     result.Duration.String(),
@@ -203,7 +203,7 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
 	}
 
 	for _, v := range result.Vulnerabilities {
-		output.Vulnerabilities = append(output.Vulnerabilities, VulnOutput{
+		scanOut.Vulnerabilities = append(scanOut.Vulnerabilities, VulnOutput{
 			RuleID:      v.RuleID,
 			Title:       v.Title,
 			Description: v.Description,
@@ -224,13 +224,13 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
 
 	switch format {
 	case "json":
-		data, err = json.MarshalIndent(output, "", "  ")
+		data, err = json.MarshalIndent(scanOut, "", "  ")
 	case "sarif":
-		data, err = toSARIF(output)
+		data, err = toSARIF(scanOut)
 	case "text":
-		data = toText(output)
+		data = toText(scanOut)
 	default:
-		data, err = json.MarshalIndent(output, "", "  ")
+		data, err = json.MarshalIndent(scanOut, "", "  ")
 	}
 
 	if err != nil {
@@ -240,17 +240,19 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger) error {
 	// Write output
 	if output != "" {
 		// Write to file
-		// Note: 'output' variable is shadowed, use global
+		if err := os.WriteFile(output, data, 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
 	}
 
 	// Print to stdout
 	fmt.Println(string(data))
 
 	// Print summary
-	printSummary(output.Summary, log)
+	printSummary(scanOut.Summary, log)
 
 	// Exit with error code if vulnerabilities found
-	if output.Summary.Critical > 0 || output.Summary.High > 0 {
+	if scanOut.Summary.Critical > 0 || scanOut.Summary.High > 0 {
 		os.Exit(1)
 	}
 
@@ -436,7 +438,7 @@ func rulesCmd() *cobra.Command {
 			log := logrus.New()
 			log.SetLevel(logrus.WarnLevel)
 
-			engine := rules.NewEngine(log)
+			engine := rules.NewEngine(config.ScannerConfig{}, log)
 			engine.Register(rules.NewSQLInjectionRule())
 			engine.Register(rules.NewXSSRule())
 			engine.Register(rules.NewSecretsRule())

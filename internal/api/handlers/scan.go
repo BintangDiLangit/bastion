@@ -43,12 +43,12 @@ type AIService interface {
 type ScanHandler struct {
 	service    ScanService
 	aiService  AIService
-	ruleEngine *rules.Engine
+	ruleEngine *rules.RuleEngine
 	logger     *logrus.Logger
 }
 
 // NewScanHandler creates a new ScanHandler.
-func NewScanHandler(service ScanService, aiService AIService, ruleEngine *rules.Engine, logger *logrus.Logger) *ScanHandler {
+func NewScanHandler(service ScanService, aiService AIService, ruleEngine *rules.RuleEngine, logger *logrus.Logger) *ScanHandler {
 	return &ScanHandler{
 		service:    service,
 		aiService:  aiService,

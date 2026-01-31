@@ -65,14 +65,18 @@ func NewRouter(deps RouterDeps) *Router {
 
 // setupMiddleware configures middleware for the router.
 func (r *Router) setupMiddleware() {
-	// Recovery middleware
-	r.engine.Use(gin.Recovery())
+	// Recovery middleware with logger
+	r.engine.Use(middleware.Recovery(r.logger))
 
 	// Request logging
 	r.engine.Use(middleware.RequestLogger(r.logger))
 
-	// CORS
+	// CORS and Security Headers
 	r.engine.Use(middleware.CORS())
+	r.engine.Use(middleware.SecurityHeaders())
+
+	// Request validation
+	r.engine.Use(middleware.MaxBodySize(10 * 1024 * 1024)) // 10MB limit
 
 	// Request ID
 	r.engine.Use(middleware.RequestID())
