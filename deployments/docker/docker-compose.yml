@@ -1,54 +1,50 @@
-version: '3.8'
-
 services:
   api:
     build:
       context: ../../
       dockerfile: deployments/docker/Dockerfile
     ports:
-      - "8080:8080"
+      - "${BASTION_PORT:-8080}:8080"
     environment:
-      - DATABASE_URL=postgres://user:pass@postgres:5432/security_auditor
-      - REDIS_URL=redis://redis:6379
-      - CONFIG_PATH=/root/configs
+      - CSA_SERVER_API_KEY=${BASTION_API_KEY:?set BASTION_API_KEY}
+      - CSA_DATABASE_HOST=postgres
+      - CSA_DATABASE_USER=user
+      - CSA_DATABASE_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      - CSA_DATABASE_DBNAME=security_auditor
+      - CSA_REDIS_HOST=redis
     depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ../../configs:/root/configs
-      
-  worker:
-    build:
-      context: ../../
-      dockerfile: deployments/docker/Dockerfile
-    command: ./worker
-    environment:
-      - DATABASE_URL=postgres://user:pass@postgres:5432/security_auditor
-      - REDIS_URL=redis://redis:6379
-      - CONFIG_PATH=/root/configs
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ../../configs:/root/configs
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       
   postgres:
     image: postgres:15-alpine
     environment:
       - POSTGRES_DB=security_auditor
       - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d security_auditor"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
       
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
 
 volumes:
   postgres_data:

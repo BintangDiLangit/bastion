@@ -1,67 +1,65 @@
-# User Guide
+# Developer guide
 
-Welcome to the Code Security Auditor! This guide will help you secure your codebase using our automated scanning tools.
+Use the CLI for local development and CI. Use MCP when an AI coding agent needs
+structured findings. Use the API only when scan history must be shared.
 
-## Getting Started
-
-### 1. Account Setup
-Currently, user management is handled via the admin console or direct database creation. Ensure you have your `API_KEY` ready.
-
-### 2. Register a Repository
-To start scanning, you must register your git repository.
+## Local review
 
 ```bash
-curl -X POST https://api.security-auditor.com/v1/repositories \
-  -H "X-API-Key: YOUR_KEY" \
-  -d '{"url":"https://github.com/my-org/my-project"}'
+make build-cli
+./bin/csa scan .
 ```
 
-## Workflows
-
-### Triggering a Manual Scan
-You can trigger a scan at any time, for example before a release.
+The command exits non-zero when it finds a critical issue. Override this for
+exploration:
 
 ```bash
-# Full Scan
-curl -X POST https://api.security-auditor.com/v1/scans \
-  -H "X-API-Key: YOUR_KEY" \
-  -d '{"repository_id":"REPO_ID", "scan_type":"full"}'
+./bin/csa scan . --fail-on-critical=false
 ```
 
-### CI/CD Integration
-Integrate security scans into your GitHub Actions pipeline.
+Save JSON for automation or SARIF for a code-scanning platform:
 
-```yaml
-steps:
-  - name: Trigger Security Scan
-    run: |
-      curl -X POST $AUDITOR_URL/v1/scans \
-        -H "X-API-Key: ${{ secrets.AUDITOR_KEY }}" \
-        -d "{\"repository_id\":\"$REPO_ID\", \"branch\":\"${{ github.ref_name }}\"}"
+```bash
+./bin/csa scan . --format json --output bastion.json
+./bin/csa scan . --format sarif --output bastion.sarif
 ```
 
-## Understanding Reports
+Use `./bin/csa scan --help` for limits, exclusions, and rule selection.
 
-Reports classify findings by severity:
+## Read a finding
 
-- **🔴 Critical**: Immediate action required (e.g., Hardcoded Keys, SQL Injection).
-- **🟠 High**: Fix in next release (e.g., XSS, Logic errors).
-- **🟡 Medium**: Schedule a fix (e.g., Weak crypto config).
-- **🟢 Low/Info**: Best practices (e.g., TODO comments).
+Treat a finding as a review lead, not a verdict:
 
-### AI Fix Suggestions
-For supported findings, the report will include an AI-generated patch.
-Always review AI suggestions before applying them, as they may lack full context of your business logic.
+1. Check whether untrusted input reaches the reported operation.
+2. Check whether validation or encoding already exists upstream.
+3. Fix the data flow when exploitable.
+4. Suppress only when reviewed, using the exact rule ID and a reason.
 
-## Managing False Positives
+```go
+// bastion:ignore-next-line xss -- sanitized by renderSafeHTML
+template.HTML(reviewedHTML)
+```
 
-If a finding is incorrect:
-1. **Dismiss**: detailed in the UI or via API (`PUT /v1/vulnerabilities/:id/dismiss`).
-2. **exclude**: Add the file or pattern to your repository's `.security-ignore` file (planned feature).
+Stable fingerprints identify the same finding after nearby lines move. MCP and
+the API use them to show review delta instead of repeating old noise.
 
-## Best Practices
+## MCP workflow
 
-1. **Scan on PR**: Catch issues before they merge to main.
-2. **Review Highs**: Don't ignore High severity issues; they often chain into Criticals.
-3. **Secret Rotation**: If the scanner finds a secret (API Key, Password), **rotate it immediately**. The secret is compromised simply by being in the git history.
-4. **Keep Scanners Updated**: We update rules frequently. Ensure your instance stays current.
+Build `bin/bastion-mcp`, configure it as shown in the
+[README](../README.md#connect-an-ai-coding-tool-with-mcp), then ask your agent:
+
+> Run `bastion_scan`. Show critical and high findings, trace each data flow,
+> and do not edit code until I approve.
+
+On the next review, pass the previous fingerprints as
+`baseline_fingerprints`. Bastion returns:
+
+- `new`: full findings not in the baseline
+- `resolved`: baseline fingerprints no longer found
+- `unchanged`: number already reviewed
+
+## What Bastion does not do
+
+Bastion does not currently provide accounts, a web UI, automatic fixes,
+dismissal APIs, hosted repository registration, or a published GitHub Action.
+Do not follow tutorials claiming those features exist.

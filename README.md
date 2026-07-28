@@ -1,235 +1,184 @@
-# 🔒 Code Security Auditor
+# Bastion
 
-An automated code review and security auditing system built with Go and Google ADK for intelligent vulnerability detection, optimization suggestions, and comprehensive security reporting.
+Local-first security review for developers and AI coding agents.
 
-[![Go Version](https://img.shields.io/badge/Go-1.25.6-blue.svg)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+Bastion scans source code with deterministic rules, produces stable finding
+fingerprints, and compares a scan with its baseline. It works as a CLI, an MCP
+server, or a small self-hosted API.
 
-## Features
+> **Alpha:** CLI and MCP are the recommended paths. The API is usable for
+> trusted self-hosted environments, but scans run inside the API process and
+> repositories are not sandboxed.
 
-- **Automated Security Scanning** - Detect SQL injection, XSS, hardcoded secrets, vulnerable dependencies, and more
-- **AI-Powered Analysis** - Use Google Gemini for intelligent vulnerability analysis and remediation suggestions
-- **Multi-Language Support** - Analyze Go, Python, JavaScript, TypeScript, Java, PHP, Ruby, and more
-- **GitHub/GitLab Integration** - Automatic PR comments and check runs
-- **Multiple Report Formats** - JSON, PDF, HTML, Markdown, and SARIF
-- **REST API** - Integrate security scanning into your CI/CD pipeline
-- **CLI Tool** - Run scans locally from the command line
-- **Background Workers** - Queue-based processing for large repositories
+## Why Bastion?
 
-## Quick Start
+- **Local first:** source stays on your machine when using CLI or MCP.
+- **Agent friendly:** one read-only `bastion_scan` MCP tool with bounded access.
+- **Review the delta:** stable fingerprints separate new, resolved, and
+  unchanged findings.
+- **Auditable suppression:** suppress a specific rule with a reason in code.
+- **Useful output:** text for humans, JSON for automation, SARIF for code hosts.
 
-### Prerequisites
+Supported source languages: Go, Python, JavaScript, TypeScript, Java, PHP, and
+Ruby.
 
-- Go 1.25.6 or later
-- PostgreSQL 14+
-- Redis 7+
-- Docker (optional, for containerized deployment)
+## Try it in 60 seconds
 
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/code-security-auditor.git
-cd code-security-auditor
-
-# Run setup script
-./scripts/setup.sh
-
-# Or manually:
-go mod download
-make build
-```
-
-### CLI Usage
+Requires Go 1.25 or newer.
 
 ```bash
-# Scan current directory
-./bin/csa scan .
-
-# Scan with specific rules
-./bin/csa scan . --rules sql_injection,xss,secrets
-
-# Output in SARIF format
-./bin/csa scan . --format sarif --output results.sarif
-
-# List available rules
-./bin/csa rules
-
-# Get help
-./bin/csa --help
+git clone https://github.com/BintangDiLangit/bastion.git
+cd bastion
+go run ./cmd/cli scan .
 ```
 
-### API Server
+Build a reusable binary:
 
 ```bash
-# Start with Docker Compose
-docker-compose -f deployments/docker/docker-compose.yml up -d
-
-# Or run directly
-make run-api
-
-# API is available at http://localhost:8080
+make build-cli
+./bin/csa scan /path/to/project
 ```
 
-## Configuration
+Useful commands:
 
-Configuration can be provided via:
-1. Config file (`configs/config.yaml`)
-2. Environment variables (prefixed with `CSA_`)
-3. Command-line flags
+```bash
+# Keep a machine-readable report
+./bin/csa scan . --format json --output bastion.json
 
-Key configuration options:
+# Produce a GitHub-compatible SARIF report
+./bin/csa scan . --format sarif --output bastion.sarif
 
-```yaml
-server:
-  port: 8080
-  
-database:
-  host: localhost
-  port: 5432
-  
-redis:
-  host: localhost
-  port: 6379
-  
-agent:
-  api_key: "your-google-ai-api-key"
-  model: "gemini-2.0-flash"
+# Select rules or exclude paths
+./bin/csa scan . --rules sql_injection,xss,secrets \
+  --exclude vendor,node_modules
+
+# Do not fail the command when a critical finding exists
+./bin/csa scan . --fail-on-critical=false
 ```
 
-See [configs/config.yaml](configs/config.yaml) for full configuration options.
+Run `./bin/csa rules` to see the rules implemented by your installed version.
 
-## API Reference
+## Connect an AI coding tool with MCP
 
-### Endpoints
+```bash
+make build-mcp
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/scans` | Start a new scan |
-| GET | `/api/v1/scans/:id` | Get scan details |
-| GET | `/api/v1/scans/:id/vulnerabilities` | Get scan vulnerabilities |
-| POST | `/api/v1/reports` | Generate a report |
-| GET | `/api/v1/reports/:id/download` | Download a report |
-| POST | `/api/v1/webhooks/github` | GitHub webhook endpoint |
-| POST | `/api/v1/webhooks/gitlab` | GitLab webhook endpoint |
+Add this server to an MCP client and replace both absolute paths:
 
-### Example: Start a Scan
+```json
+{
+  "mcpServers": {
+    "bastion": {
+      "command": "/absolute/path/to/bastion/bin/bastion-mcp",
+      "args": ["-root", "/absolute/path/to/project"]
+    }
+  }
+}
+```
+
+Ask the agent: **“Run `bastion_scan` on this project and explain only new
+critical or high findings.”**
+
+The MCP server is read-only. It accepts relative paths inside `-root`, rejects
+path and symlink escapes, and limits scan size. Pass fingerprints from a prior
+result as `baseline_fingerprints` to receive new findings, resolved
+fingerprints, and an unchanged count.
+
+## Suppress a reviewed false positive
+
+Suppress one finding with its exact rule ID:
+
+```go
+// bastion:ignore-next-line xss -- sanitized by renderSafeHTML
+template.HTML(reviewedHTML)
+```
+
+Or suppress selected rules for an entire detector fixture:
+
+```go
+// bastion:ignore-file secrets,RULE-DESER-001 -- test signatures only
+```
+
+`all` is supported for generated files, though excluding the generated path is
+usually clearer.
+
+## Self-host the API
+
+Docker is the shortest supported setup:
+
+```bash
+POSTGRES_PASSWORD='replace-with-a-database-password' \
+BASTION_API_KEY='replace-with-a-long-random-api-key' \
+docker compose -f deployments/docker/docker-compose.yml up --build
+```
+
+Start a scan:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/scans \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repository_url": "https://github.com/user/repo",
-    "branch": "main"
-  }'
+  -H 'X-API-Key: replace-with-a-long-random-api-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"repository_url":"https://github.com/BintangDiLangit/bastion","branch":"main"}'
 ```
 
-See [docs/API.md](docs/API.md) for complete API documentation.
+Use the returned `scan_id`:
 
-## Security Rules
+```bash
+curl -H 'X-API-Key: replace-with-a-long-random-api-key' \
+  http://localhost:8080/api/v1/scans/SCAN_ID
 
-Built-in security rules:
+curl -H 'X-API-Key: replace-with-a-long-random-api-key' \
+  http://localhost:8080/api/v1/scans/SCAN_ID/vulnerabilities
 
-| Rule ID | Description | Severity |
-|---------|-------------|----------|
-| `sql_injection` | SQL injection vulnerabilities | Critical |
-| `xss` | Cross-site scripting | High |
-| `secrets` | Hardcoded secrets and credentials | Critical |
-| `dependency` | Vulnerable dependencies | High |
-| `command_injection` | Command injection | Critical |
-| `path_traversal` | Path traversal attacks | High |
-
-See [configs/rules.yaml](configs/rules.yaml) for rule configuration.
-
-## Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐
-│   API Server    │────▶│   PostgreSQL    │
-└────────┬────────┘     └─────────────────┘
-         │
-         │              ┌─────────────────┐
-         ├─────────────▶│     Redis       │
-         │              └────────┬────────┘
-         │                       │
-┌────────▼────────┐     ┌────────▼────────┐
-│    Workers      │────▶│   Scanner       │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         │              ┌────────▼────────┐
-         └─────────────▶│   AI Agent      │
-                        │   (Gemini)      │
-                        └─────────────────┘
+curl -H 'X-API-Key: replace-with-a-long-random-api-key' \
+  http://localhost:8080/api/v1/scans/SCAN_ID/delta
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture documentation.
+The delta endpoint automatically uses the repository's previous completed scan.
+See [API documentation](docs/API.md).
 
 ## Development
 
-### Project Structure
-
-```
-code-security-auditor/
-├── cmd/                    # Entry points
-│   ├── api/               # API server
-│   ├── worker/            # Background worker
-│   └── cli/               # CLI tool
-├── internal/              # Internal packages
-│   ├── api/               # HTTP handlers
-│   ├── scanner/           # Code scanner
-│   ├── agent/             # AI agent
-│   ├── models/            # Data models
-│   └── ...
-├── pkg/                   # Public packages
-├── configs/               # Configuration files
-├── deployments/           # Deployment configs
-└── docs/                  # Documentation
-```
-
-### Running Tests
-
 ```bash
-# Run all tests
 make test
-
-# Run with coverage
-make coverage
-
-# Run linter
-make lint
-```
-
-### Building
-
-```bash
-# Build all binaries
-make build
-
-# Build specific binary
-make build-api
-make build-worker
 make build-cli
-
-# Build Docker images
-make docker
+make build-mcp
+make scan
 ```
 
-## Contributing
+Important paths:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```text
+cmd/cli/          local scanner
+cmd/mcp/          MCP stdio server
+cmd/api/          HTTP API
+internal/scanner/ rule engine
+internal/service/ persisted scan lifecycle and delta
+docs/             API, deployment, CI, and demo guides
+```
+
+## Current boundaries
+
+- Detection is deterministic pattern-based analysis, not proof that code is
+  exploitable.
+- Private repository credentials are not accepted by the API.
+- API scans execute in-process; use CLI or MCP for local development.
+- Hosted service, UI, automatic fixes, webhook comments, and a published
+  GitHub Action are not shipped.
+
+These boundaries are deliberate: the repository documents only behavior it
+actually provides.
+
+## Documentation
+
+- [Developer guide](docs/USER_GUIDE.md)
+- [API](docs/API.md)
+- [CI integration](docs/CICD.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Video demo script](docs/DEMO.md)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Gin Web Framework](https://github.com/gin-gonic/gin)
-- [go-git](https://github.com/go-git/go-git)
-- [Google Generative AI](https://ai.google.dev/)
-- [Asynq](https://github.com/hibiken/asynq)
+MIT. See [LICENSE](LICENSE).

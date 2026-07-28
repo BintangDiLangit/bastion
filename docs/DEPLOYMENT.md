@@ -1,86 +1,56 @@
-# Deployment Guide
+# API deployment
 
-This guide covers the deployment of the Code Security Auditor in production environments.
+The API stores scan history in PostgreSQL and scans public HTTPS repositories.
+Redis is included in the current Compose stack but is not part of the scan
+execution path.
 
-## Prerequisites
+> The API is alpha software. Scans run inside the API process without container
+> isolation. Deploy only in a trusted environment with network and resource
+> controls.
 
-- **Docker** (v20.10+) & **Docker Compose** (v2.0+)
-- **PostgreSQL** (v15+) - if running external DB
-- **Redis** (v7+) - if running external Redis
-- **Google Cloud Project** (for ADK features)
+## Start
 
-## Installation Steps
+Requirements: Docker with Compose v2.
 
-### 1. Clone Repository
 ```bash
-git clone https://github.com/your-org/code-security-auditor.git
-cd code-security-auditor
-```
+git clone https://github.com/BintangDiLangit/bastion.git
+cd bastion
 
-### 2. Configure Environment
-Copy the example environment file:
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set your secrets:
-- `DATABASE_URL`: Connection string for Postgres.
-- `REDIS_URL`: Connection string for Redis.
-- `ADK_API_KEY`: Your Google GenAI/ADK key.
-- `GITHUB_PRIVATE_KEY_PATH`: Path to GitHub PEM file (if using GitHub App).
-
-### 3. Build & Run (Docker Compose)
-To start the full stack (API, Worker, DB, Redis):
-```bash
+POSTGRES_PASSWORD='replace-with-a-database-password' \
+BASTION_API_KEY='replace-with-a-long-random-api-key' \
 docker compose -f deployments/docker/docker-compose.yml up -d --build
 ```
 
-### 4. Verify Deployment
-Check service status:
+Optional host port variables: `BASTION_PORT`, `POSTGRES_PORT`, and `REDIS_PORT`.
+
+## Verify
+
 ```bash
-docker compose -f deployments/docker/docker-compose.yml ps
+curl http://localhost:8080/health/live
+curl http://localhost:8080/health/ready
+docker compose -f deployments/docker/docker-compose.yml logs api
 ```
 
-Check API health:
+Health endpoints are public. Every `/api/v1` request requires the exact API key
+in `X-API-Key` or `Authorization: Bearer`.
+
+## Stop
+
 ```bash
-curl http://localhost:8080/health
-# {"status":"ok","version":"1.0.0"}
+docker compose -f deployments/docker/docker-compose.yml down
 ```
 
-## Kubernetes Deployment
+Add `-v` only when you intentionally want to delete PostgreSQL and Redis data.
 
-*(Coming Soon)* - Helm charts are in development.
+## Production minimums
 
-## Monitoring
+- Terminate TLS before the API.
+- Keep PostgreSQL and Redis ports private; the published ports are for local
+  development.
+- Restrict outbound Git access to configured supported hosts.
+- Set CPU, memory, process, and request limits outside Bastion.
+- Back up PostgreSQL and test restoration.
+- Rotate the API key as a secret, never commit it.
 
-### Metrics
-The API exposes Prometheus-compatible metrics at `/metrics`:
-- `scan_duration_seconds`: Histogram of scan times.
-- `http_requests_total`: Counter of API requests.
-- `vulnerabilities_detected`: Counter by severity.
-
-### Logging
-Logs are structured JSON sent to `stdout`/`stderr`.
-Recommended aggregation: ELK Stack, Datadog, or CloudWatch.
-
-## Backup Strategy
-
-### Database
-- Perform daily `pg_dump` backups.
-- Enable WAL archiving for Point-in-Time Recovery (PITR).
-
-### Configuration
-- Backup `.env` and any key files (e.g., GitHub PEM).
-- **Do not** backup the `configs/` directory if it contains ephemeral data; strictly config files should be version controlled.
-
-## Maintenance
-
-### Updates
-1. Pull latest code.
-2. Rebuild images: `docker compose build`.
-3. Apply migrations (auto-applied on startup currently).
-4. Restart services: `docker compose up -d`.
-
-### Cleanup
-The `worker` automatically cleans up temporary git clones.
-Manually monitor disk usage of `/tmp` or configured `GIT_TEMP_DIR` volumes.
+There is currently no Kubernetes chart, `/metrics` endpoint, distributed
+worker, or automatic backup facility.

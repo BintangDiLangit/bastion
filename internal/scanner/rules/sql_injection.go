@@ -91,34 +91,6 @@ type sqlPattern struct {
 func (r *SQLInjectionRule) getPatterns(language string) []sqlPattern {
 	var patterns []sqlPattern
 
-	// Common SQL concatenation patterns
-	commonPatterns := []struct {
-		pattern     string
-		description string
-		confidence  float64
-	}{
-		{
-			pattern:     `(?i)(SELECT|INSERT|UPDATE|DELETE|DROP|UNION).*\+\s*["']?\w+["']?\s*\+`,
-			description: "String concatenation in SQL query",
-			confidence:  0.8,
-		},
-		{
-			pattern:     `(?i)(SELECT|INSERT|UPDATE|DELETE).*%[sv]`,
-			description: "String formatting in SQL query",
-			confidence:  0.75,
-		},
-		{
-			pattern:     `(?i)(SELECT|INSERT|UPDATE|DELETE).*\$\{.*\}`,
-			description: "Template literal in SQL query",
-			confidence:  0.85,
-		},
-		{
-			pattern:     `(?i)(SELECT|INSERT|UPDATE|DELETE).*\bfmt\.Sprintf\b`,
-			description: "fmt.Sprintf used in SQL query",
-			confidence:  0.9,
-		},
-	}
-
 	// Language-specific patterns
 	langPatterns := map[string][]struct {
 		pattern     string
@@ -226,18 +198,6 @@ func (r *SQLInjectionRule) getPatterns(language string) []sqlPattern {
 				confidence:  0.85,
 			},
 		},
-	}
-
-	// Add common patterns
-	for _, p := range commonPatterns {
-		regex, err := regexp.Compile(p.pattern)
-		if err == nil {
-			patterns = append(patterns, sqlPattern{
-				regex:       regex,
-				description: p.description,
-				confidence:  p.confidence,
-			})
-		}
 	}
 
 	// Add language-specific patterns

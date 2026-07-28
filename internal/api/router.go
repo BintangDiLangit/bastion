@@ -14,23 +14,19 @@ import (
 
 // Router holds the HTTP router and its dependencies.
 type Router struct {
-	engine         *gin.Engine
-	config         *config.Config
-	logger         *logrus.Logger
-	healthHandler  *handlers.HealthHandler
-	scanHandler    *handlers.ScanHandler
-	reportHandler  *handlers.ReportHandler
-	webhookHandler *handlers.WebhookHandler
+	engine        *gin.Engine
+	config        *config.Config
+	logger        *logrus.Logger
+	healthHandler *handlers.HealthHandler
+	scanHandler   *handlers.ScanLifecycleHandler
 }
 
 // RouterDeps holds dependencies for the router.
 type RouterDeps struct {
-	Config         *config.Config
-	Logger         *logrus.Logger
-	HealthHandler  *handlers.HealthHandler
-	ScanHandler    *handlers.ScanHandler
-	ReportHandler  *handlers.ReportHandler
-	WebhookHandler *handlers.WebhookHandler
+	Config        *config.Config
+	Logger        *logrus.Logger
+	HealthHandler *handlers.HealthHandler
+	ScanHandler   *handlers.ScanLifecycleHandler
 }
 
 // NewRouter creates a new Router with all routes configured.
@@ -48,13 +44,11 @@ func NewRouter(deps RouterDeps) *Router {
 	engine := gin.New()
 
 	router := &Router{
-		engine:         engine,
-		config:         deps.Config,
-		logger:         deps.Logger,
-		healthHandler:  deps.HealthHandler,
-		scanHandler:    deps.ScanHandler,
-		reportHandler:  deps.ReportHandler,
-		webhookHandler: deps.WebhookHandler,
+		engine:        engine,
+		config:        deps.Config,
+		logger:        deps.Logger,
+		healthHandler: deps.HealthHandler,
+		scanHandler:   deps.ScanHandler,
 	}
 
 	router.setupMiddleware()
@@ -72,7 +66,7 @@ func (r *Router) setupMiddleware() {
 	r.engine.Use(middleware.RequestLogger(r.logger))
 
 	// CORS and Security Headers
-	r.engine.Use(middleware.CORS())
+	r.engine.Use(middleware.CORS(r.config.Server.CORSAllowedOrigins))
 	r.engine.Use(middleware.SecurityHeaders())
 
 	// Request validation
@@ -101,62 +95,18 @@ func (r *Router) setupRoutes() {
 			}))
 		}
 
-		// Webhooks (with signature verification)
-		webhooks := v1.Group("/webhooks")
-		{
-			webhooks.POST("/github", r.webhookHandler.HandleGitHub)
-			webhooks.POST("/gitlab", r.webhookHandler.HandleGitLab)
-		}
-
 		// Protected routes (require API key)
 		protected := v1.Group("")
-		protected.Use(middleware.APIKeyAuth())
+		protected.Use(middleware.APIKeyAuth(r.config.Server.APIKey))
 		{
-			// Repositories
-			repos := protected.Group("/repositories")
-			{
-				repos.GET("", r.scanHandler.ListRepositories)
-				repos.POST("", r.scanHandler.CreateRepository)
-				repos.GET("/:id", r.scanHandler.GetRepository)
-				repos.PUT("/:id", r.scanHandler.UpdateRepository)
-				repos.DELETE("/:id", r.scanHandler.DeleteRepository)
-				repos.GET("/:id/scans", r.scanHandler.GetRepositoryScans)
-				repos.GET("/:id/stats", r.scanHandler.GetRepositoryStats)
-			}
-
 			// Scans
 			scans := protected.Group("/scans")
 			{
-				scans.POST("", r.scanHandler.CreateScan)
-				scans.GET("/:id", r.scanHandler.GetScan)
-				scans.GET("/:id/progress", r.scanHandler.GetScanProgress)
-				scans.POST("/:id/cancel", r.scanHandler.CancelScan)
-				scans.GET("/:id/vulnerabilities", r.scanHandler.GetScanVulnerabilities)
-				scans.GET("/:id/summary", r.scanHandler.GetScanSummary)
-			}
-
-			// Vulnerabilities
-			vulns := protected.Group("/vulnerabilities")
-			{
-				vulns.GET("/:id", r.scanHandler.GetVulnerability)
-				vulns.PATCH("/:id", r.scanHandler.UpdateVulnerability)
-				vulns.POST("/:id/analyze", r.scanHandler.AnalyzeVulnerability)
-			}
-
-			// Reports
-			reports := protected.Group("/reports")
-			{
-				reports.POST("", r.reportHandler.CreateReport)
-				reports.GET("/:id", r.reportHandler.GetReport)
-				reports.GET("/:id/download", r.reportHandler.DownloadReport)
-				reports.GET("", r.reportHandler.ListReports)
-			}
-
-			// Rules
-			rules := protected.Group("/rules")
-			{
-				rules.GET("", r.scanHandler.ListRules)
-				rules.GET("/:id", r.scanHandler.GetRule)
+				scans.POST("", r.scanHandler.Create)
+				scans.GET("/:id", r.scanHandler.Get)
+				scans.POST("/:id/cancel", r.scanHandler.Cancel)
+				scans.GET("/:id/vulnerabilities", r.scanHandler.Findings)
+				scans.GET("/:id/delta", r.scanHandler.Delta)
 			}
 		}
 	}

@@ -730,6 +730,13 @@ func (m *Manager) ScanPath(ctx context.Context, scanID uuid.UUID, path string, o
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path: %w", err)
 	}
+	maxFiles := opts.MaxFiles
+	if maxFiles == 0 {
+		maxFiles = m.config.MaxFilesPerScan
+	}
+	if maxFiles > 0 && len(files) > maxFiles {
+		files = files[:maxFiles]
+	}
 
 	result.FilesScanned = len(files)
 	for _, f := range files {

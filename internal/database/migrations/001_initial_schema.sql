@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS vulnerabilities (
     column_start INTEGER,
     column_end INTEGER,
     remediation TEXT,
-    references JSONB NOT NULL DEFAULT '[]',
+    reference_data JSONB NOT NULL DEFAULT '[]',
     metadata JSONB NOT NULL DEFAULT '{}',
     confidence DECIMAL(3,2) NOT NULL DEFAULT 0.80,
     suppressed BOOLEAN NOT NULL DEFAULT false,

@@ -1,6 +1,12 @@
 package scanner
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,9 +30,18 @@ func mustNewGitManager(cfg config.GitConfig, logger *logrus.Logger) *GitManager 
 // convertFindingsToVulnerabilities converts rule findings to vulnerabilities.
 func convertFindingsToVulnerabilities(findings []rules.Finding, scanID uuid.UUID) []models.Vulnerability {
 	vulns := make([]models.Vulnerability, len(findings))
+	occurrences := make(map[string]int)
 	for i, f := range findings {
+		fingerprint := findingFingerprint(f)
+		occurrence := occurrences[fingerprint]
+		occurrences[fingerprint]++
+		if occurrence > 0 {
+			sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", fingerprint, occurrence)))
+			fingerprint = hex.EncodeToString(sum[:16])
+		}
 		vulns[i] = models.Vulnerability{
 			ID:          uuid.New(),
+			Fingerprint: fingerprint,
 			ScanID:      scanID,
 			RuleID:      f.RuleID,
 			Title:       f.Title,
@@ -43,4 +58,16 @@ func convertFindingsToVulnerabilities(findings []rules.Finding, scanID uuid.UUID
 		}
 	}
 	return vulns
+}
+
+var snippetLine = regexp.MustCompile(`(?m)^>\s*\d+\s*\|\s*(.*)$`)
+
+func findingFingerprint(f rules.Finding) string {
+	source := ""
+	if match := snippetLine.FindStringSubmatch(f.CodeSnippet); len(match) == 2 {
+		source = strings.Join(strings.Fields(match[1]), " ")
+	}
+	value := strings.ToLower(f.RuleID) + "\x00" + filepath.ToSlash(filepath.Clean(f.FilePath)) + "\x00" + source
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:16])
 }

@@ -193,8 +193,10 @@ func (t *CodeContextRetrieverTool) Execute(ctx context.Context, params map[strin
 		includeImports = ii
 	}
 
-	// Resolve the full path
-	fullPath := filepath.Join(t.basePath, filePath)
+	fullPath, err := resolveFileWithin(t.basePath, filePath)
+	if err != nil {
+		return nil, err
+	}
 
 	// Read the file
 	content, err := os.ReadFile(fullPath)
@@ -565,7 +567,10 @@ func (t *DependencyCheckerTool) checkSinglePackage(ctx context.Context, language
 }
 
 func (t *DependencyCheckerTool) analyzePackageFile(ctx context.Context, packageFile, language string) (interface{}, error) {
-	fullPath := filepath.Join(t.basePath, packageFile)
+	fullPath, err := resolveFileWithin(t.basePath, packageFile)
+	if err != nil {
+		return nil, err
+	}
 
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -589,6 +594,36 @@ func (t *DependencyCheckerTool) analyzePackageFile(ctx context.Context, packageF
 		"vulnerabilities": []interface{}{},
 		"message":         "Full vulnerability scanning requires OSV integration",
 	}, nil
+}
+
+func resolveFileWithin(basePath, requestedPath string) (string, error) {
+	if requestedPath == "" || filepath.IsAbs(requestedPath) {
+		return "", fmt.Errorf("file path must be relative to repository")
+	}
+
+	base, err := filepath.EvalSymlinks(basePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve repository path: %w", err)
+	}
+	base, err = filepath.Abs(base)
+	if err != nil {
+		return "", fmt.Errorf("resolve repository path: %w", err)
+	}
+
+	candidate, err := filepath.EvalSymlinks(filepath.Join(base, requestedPath))
+	if err != nil {
+		return "", fmt.Errorf("resolve file path: %w", err)
+	}
+	candidate, err = filepath.Abs(candidate)
+	if err != nil {
+		return "", fmt.Errorf("resolve file path: %w", err)
+	}
+
+	relative, err := filepath.Rel(base, candidate)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("file path escapes repository")
+	}
+	return candidate, nil
 }
 
 func (t *DependencyCheckerTool) autoDetectAndAnalyze(ctx context.Context) (interface{}, error) {

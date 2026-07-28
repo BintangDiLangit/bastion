@@ -1,5 +1,7 @@
 package rules
 
+// bastion:ignore-file xss detector signatures are data, not browser execution
+
 import (
 	"fmt"
 	"regexp"
@@ -302,15 +304,17 @@ func (r *XSSRule) getPatterns(language string) []xssPattern {
 		},
 	}
 
-	// Add common patterns
-	for _, p := range commonPatterns {
-		regex, err := regexp.Compile(p.pattern)
-		if err == nil {
-			patterns = append(patterns, xssPattern{
-				regex:       regex,
-				description: p.description,
-				confidence:  p.confidence,
-			})
+	// DOM patterns only apply to browser-facing source.
+	if language == "javascript" || language == "typescript" || language == "html" {
+		for _, p := range commonPatterns {
+			regex, err := regexp.Compile(p.pattern)
+			if err == nil {
+				patterns = append(patterns, xssPattern{
+					regex:       regex,
+					description: p.description,
+					confidence:  p.confidence,
+				})
+			}
 		}
 	}
 

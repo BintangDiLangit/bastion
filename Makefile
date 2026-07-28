@@ -14,6 +14,7 @@ GOVET=$(GOCMD) vet
 BINARY_API=bin/api
 BINARY_WORKER=bin/worker
 BINARY_CLI=bin/csa
+BINARY_MCP=bin/bastion-mcp
 
 # Directories
 CMD_DIR=./cmd
@@ -35,7 +36,7 @@ BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 all: clean deps lint test build
 
 ## Build all binaries
-build: build-api build-worker build-cli
+build: build-api build-worker build-cli build-mcp
 
 ## Build API server
 build-api:
@@ -54,6 +55,12 @@ build-cli:
 	@echo "Building CLI..."
 	@mkdir -p $(BIN_DIR)
 	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_CLI) $(CMD_DIR)/cli
+
+## Build MCP server
+build-mcp:
+	@echo "Building MCP server..."
+	@mkdir -p $(BIN_DIR)
+	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_MCP) $(CMD_DIR)/mcp
 
 ## Clean build artifacts
 clean:

@@ -4,6 +4,8 @@
 server:
   host: "0.0.0.0"
   port: 8080
+  api_key: "" # Set via CSA_SERVER_API_KEY
+  gitlab_webhook_token: "" # Set via CSA_GITLAB_WEBHOOK_TOKEN
   read_timeout: "30s"
   write_timeout: "30s"
   shutdown_timeout: "10s"
@@ -13,8 +15,8 @@ database:
   host: "localhost"
   port: 5432
   user: "postgres"
-  password: "postgres"
-  database: "code_security_auditor"
+  password: "" # Set via CSA_DATABASE_PASSWORD
+  dbname: "code_security_auditor"
   ssl_mode: "disable"
   max_open_conns: 25
   max_idle_conns: 5
@@ -32,11 +34,15 @@ redis:
   write_timeout: "3s"
 
 git:
-  clone_dir: "/tmp/code-security-auditor/repos"
+  temp_dir: "/tmp/code-security-auditor/repos"
   clone_timeout: "5m"
   max_repo_size: 104857600  # 100MB
+  supported_hosts: ["github.com", "gitlab.com", "bitbucket.org"]
+  clone_depth: 1
+  max_concurrent_clones: 5
 
-agent:
+adk:
+  enabled: false
   project_id: ""  # GCP Project ID
   location: "us-central1"
   model: "gemini-2.0-flash"
@@ -48,8 +54,8 @@ agent:
 scanner:
   max_file_size: 1048576  # 1MB
   max_files_per_scan: 1000
-  scan_timeout: "30m"
-  concurrent_workers: 4
+  timeout: "30m"
+  max_concurrent: 4
   enabled_rules:
     - sql_injection
     - xss
@@ -84,11 +90,11 @@ reporter:
 
 queue:
   concurrency: 5
-  retry_limit: 3
+  max_retries: 3
   retry_delay: "10s"
   shutdown_timeout: "30s"
 
-logger:
+logging:
   level: "info"  # debug, info, warn, error
   format: "json"  # json, text
   output: "stdout"  # stdout, file

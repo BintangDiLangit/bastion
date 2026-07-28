@@ -219,12 +219,12 @@ const (
 		INSERT INTO vulnerabilities (
 			id, scan_id, rule_id, title, description, severity, category, 
 			file_path, line_start, line_end, column_start, column_end, 
-			code_snippet, remediation, references, metadata, confidence, 
+			code_snippet, remediation, reference_data, metadata, confidence,
 			cwe_id, cvss_score, false_positive, suppressed, created_at
 		) VALUES (
 			:id, :scan_id, :rule_id, :title, :description, :severity, :category,
 			:file_path, :line_start, :line_end, :column_start, :column_end,
-			:code_snippet, :remediation, :references, :metadata, :confidence,
+			:code_snippet, :remediation, :reference_data, :metadata, :confidence,
 			:cwe_id, :cvss_score, :false_positive, :suppressed, :created_at
 		)
 	`
@@ -233,12 +233,12 @@ const (
 		INSERT INTO vulnerabilities (
 			id, scan_id, rule_id, title, description, severity, category,
 			file_path, line_start, line_end, column_start, column_end,
-			code_snippet, remediation, references, metadata, confidence,
+			code_snippet, remediation, reference_data, metadata, confidence,
 			cwe_id, cvss_score, false_positive, suppressed, created_at
 		) VALUES (
 			:id, :scan_id, :rule_id, :title, :description, :severity, :category,
 			:file_path, :line_start, :line_end, :column_start, :column_end,
-			:code_snippet, :remediation, :references, :metadata, :confidence,
+			:code_snippet, :remediation, :reference_data, :metadata, :confidence,
 			:cwe_id, :cvss_score, :false_positive, :suppressed, :created_at
 		)
 	`

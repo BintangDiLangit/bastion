@@ -2,7 +2,12 @@
 package middleware
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
+	"io"
 	"net/http"
 	"strings"
 
@@ -10,7 +15,7 @@ import (
 )
 
 // APIKeyAuth validates API key authentication.
-func APIKeyAuth() gin.HandlerFunc {
+func APIKeyAuth(expectedKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey == "" {
@@ -31,7 +36,7 @@ func APIKeyAuth() gin.HandlerFunc {
 
 		// Validate API key
 		// In production, this would validate against the database
-		valid, keyInfo := validateAPIKey(apiKey)
+		valid, keyInfo := validateAPIKey(apiKey, expectedKey)
 		if !valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "Unauthorized",
@@ -56,16 +61,14 @@ type APIKeyInfo struct {
 
 // validateAPIKey validates an API key against the database.
 // In production, this would query the database.
-func validateAPIKey(key string) (bool, APIKeyInfo) {
-	// For development/testing, accept any key that looks valid
-	// In production, this should validate against the api_keys table
-	if len(key) >= 32 {
-		return true, APIKeyInfo{
-			ID:     "dev-key",
-			Scopes: []string{"read", "write", "admin"},
-		}
+func validateAPIKey(key, expectedKey string) (bool, APIKeyInfo) {
+	if expectedKey == "" {
+		return false, APIKeyInfo{}
 	}
-	return false, APIKeyInfo{}
+	keyHash := sha256.Sum256([]byte(key))
+	expectedHash := sha256.Sum256([]byte(expectedKey))
+	valid := subtle.ConstantTimeCompare(keyHash[:], expectedHash[:]) == 1
+	return valid, APIKeyInfo{ID: "configured-key", Scopes: []string{"admin"}}
 }
 
 // RequireScopes checks if the API key has required scopes.
@@ -116,11 +119,11 @@ func RequireScopes(requiredScopes ...string) gin.HandlerFunc {
 }
 
 // WebhookSignatureAuth validates webhook signatures.
-func WebhookSignatureAuth(provider string) gin.HandlerFunc {
+func WebhookSignatureAuth(provider, secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		switch provider {
 		case "github":
-			if !validateGitHubSignature(c) {
+			if !validateGitHubSignature(c, secret) {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error":   "Unauthorized",
 					"message": "Invalid webhook signature",
@@ -128,7 +131,7 @@ func WebhookSignatureAuth(provider string) gin.HandlerFunc {
 				return
 			}
 		case "gitlab":
-			if !validateGitLabSignature(c) {
+			if !validateGitLabSignature(c, secret) {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error":   "Unauthorized",
 					"message": "Invalid webhook token",
@@ -142,34 +145,32 @@ func WebhookSignatureAuth(provider string) gin.HandlerFunc {
 }
 
 // validateGitHubSignature validates GitHub webhook signature.
-func validateGitHubSignature(c *gin.Context) bool {
+func validateGitHubSignature(c *gin.Context, secret string) bool {
 	signature := c.GetHeader("X-Hub-Signature-256")
-	if signature == "" {
+	if signature == "" || secret == "" {
 		return false
 	}
 
-	// In production, compute HMAC and compare
-	// payload := c.GetRawData()
-	// secret := getWebhookSecret(repoID)
-	// expectedSig := computeHMACSHA256(payload, secret)
-	// return subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSig)) == 1
-
-	// For now, allow if signature header is present
-	return len(signature) > 0
+	payload, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return false
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(payload))
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(payload)
+	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(signature), []byte(expected))
 }
 
 // validateGitLabSignature validates GitLab webhook token.
-func validateGitLabSignature(c *gin.Context) bool {
+func validateGitLabSignature(c *gin.Context, expectedToken string) bool {
 	token := c.GetHeader("X-Gitlab-Token")
-	if token == "" {
+	if token == "" || expectedToken == "" {
 		return false
 	}
-
-	// In production, validate against stored token
-	// expectedToken := getWebhookToken(repoID)
-	// return subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) == 1
-
-	return len(token) > 0
+	tokenHash := sha256.Sum256([]byte(token))
+	expectedHash := sha256.Sum256([]byte(expectedToken))
+	return subtle.ConstantTimeCompare(tokenHash[:], expectedHash[:]) == 1
 }
 
 // BasicAuth provides HTTP Basic authentication.

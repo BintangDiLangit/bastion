@@ -1,89 +1,73 @@
-# CI/CD Integration Guide
+# CI integration
 
-The Code Security Auditor can be integrated into your CI/CD pipelines to ensure every commit and pull request is secure.
+Build and run the CLI directly. No API key or hosted service is required.
 
 ## GitHub Actions
 
-We provide a dedicated GitHub Action that runs the scanner in a Docker container.
-
-### Usage
-
-Add the following workflow to your repository at `.github/workflows/security.yml`:
-
 ```yaml
-name: Security Scan
-on: [push, pull_request]
+name: Bastion
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
-  security:
-    name: Code Security Auditor
+  scan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Run Security Scan
-        uses: code-security-auditor/action@v1
+      - name: Check out project
+        uses: actions/checkout@v4
         with:
-          api-key: ${{ secrets.SECURITY_AUDITOR_API_KEY }}
-          fail-on-critical: true
-          scan-type: full
+          path: project
+      - name: Check out Bastion
+        uses: actions/checkout@v4
+        with:
+          repository: BintangDiLangit/bastion
+          path: bastion
+          # Pin a release tag or commit for reproducible security checks.
+          ref: main
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bastion/go.mod
+          cache: true
+      - name: Build Bastion
+        working-directory: bastion
+        run: go build -o /tmp/bastion ./cmd/cli
+      - name: Scan
+        run: /tmp/bastion scan project --format sarif --output bastion.sarif
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bastion.sarif
 ```
 
-### Inputs
-
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `api-key` | Your API Key for reporting results. | Yes | - |
-| `fail-on-critical` | Fail the build if critical/high issues are found. | No | `true` |
-| `scan-type` | Type of scan to perform (`full`, `quick`). | No | `full` |
-
-### Outputs
-
-| Output | Description |
-|--------|-------------|
-| `report-path` | Path to the generated JSON/SARIF report. |
+Replace `ref: main` with a release tag or commit before relying on this as a
+required security check. A release-binary workflow can replace the build once
+releases exist.
 
 ## GitLab CI
 
-Use our Docker image to run scans in your GitLab CI pipeline.
-
 ```yaml
-security_scan:
-  stage: test
-  image: 
-    name: code-security-auditor/scanner:latest
-    entrypoint: [""]
+bastion:
+  image: golang:1.25
   script:
-    - /bin/scanner-cli scan . --api-key $SECURITY_AUDITOR_API_KEY --fail-on-critical
-  rules:
-    - if: $CI_MERGE_REQUEST_ID
-    - if: $CI_COMMIT_BRANCH == "main"
+    - git clone --depth 1 https://github.com/BintangDiLangit/bastion.git /tmp/bastion-src
+    - go build -C /tmp/bastion-src -o /tmp/bastion ./cmd/cli
+    - /tmp/bastion scan . --format json --output bastion.json
+  artifacts:
+    when: always
+    paths: [bastion.json]
 ```
 
-## Jenkins
+For reproducible builds, pin the clone to a commit or release tag.
 
-Integrate using a Docker pipeline agent.
+## Exit behavior
 
-```groovy
-pipeline {
-    agent {
-        docker { image 'code-security-auditor/scanner:latest' }
-    }
-    stages {
-        stage('Security Scan') {
-            steps {
-                sh '/bin/scanner-cli scan . --api-key $SECURITY_AUDITOR_API_KEY --fail-on-critical'
-            }
-        }
-    }
-}
-```
-
-## Troubleshooting
-
-### Build Failures
-If the build fails with `Exit Code 1`, it means critical or high severity vulnerabilities were detected. Check the console output for details.
-
-### Authentication Errors
-Ensure `SECURITY_AUDITOR_API_KEY` is set in your repository's secrets/variables.
+`scan` fails when a critical finding exists by default. Use
+`--fail-on-critical=false` when CI should publish a report without blocking.

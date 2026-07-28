@@ -217,6 +217,7 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 	for _, v := range result.Vulnerabilities {
 		scanOut.Vulnerabilities = append(scanOut.Vulnerabilities, VulnOutput{
 			RuleID:      v.RuleID,
+			Fingerprint: v.Fingerprint,
 			Title:       v.Title,
 			Description: v.Description,
 			Severity:    string(v.Severity),
@@ -296,6 +297,7 @@ type ScanSummary struct {
 // VulnOutput represents vulnerability output.
 type VulnOutput struct {
 	RuleID      string  `json:"rule_id"`
+	Fingerprint string  `json:"fingerprint"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Severity    string  `json:"severity"`
@@ -389,6 +391,9 @@ func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
 		results = append(results, map[string]interface{}{
 			"ruleId": v.RuleID,
 			"level":  level,
+			"partialFingerprints": map[string]string{
+				"bastion/v1": v.Fingerprint,
+			},
 			"message": map[string]string{
 				"text": v.Description,
 			},
@@ -458,7 +463,8 @@ func rulesCmd() *cobra.Command {
 			engine.Register(rules.NewDependencyRule())
 
 			fmt.Println("Available Security Rules:")
-			fmt.Println("=========================\n")
+			fmt.Println("=========================")
+			fmt.Println()
 
 			for _, rule := range engine.ListRules() {
 				info := rules.GetRuleInfo(rule)

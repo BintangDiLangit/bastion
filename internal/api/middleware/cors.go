@@ -2,20 +2,30 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 )
 
 // CORS returns CORS middleware with configurable options.
-func CORS() gin.HandlerFunc {
+func CORS(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := c.GetHeader("Origin")
+		if slices.Contains(allowedOrigins, "*") {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if origin != "" && slices.Contains(allowedOrigins, origin) {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Add("Vary", "Origin")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, X-Request-ID, accept, origin, Cache-Control, X-Requested-With, X-Gitlab-Token, X-Hub-Signature-256")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
 
 		if c.Request.Method == "OPTIONS" {
+			if origin != "" && c.Writer.Header().Get("Access-Control-Allow-Origin") == "" {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

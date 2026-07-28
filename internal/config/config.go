@@ -72,6 +72,12 @@ type Config struct {
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
+	// APIKey authenticates API requests. Set with CSA_SERVER_API_KEY.
+	APIKey string `mapstructure:"api_key"`
+
+	// GitLabWebhookToken verifies GitLab webhook requests.
+	GitLabWebhookToken string `mapstructure:"gitlab_webhook_token"`
+
 	// Port is the HTTP server port (1-65535).
 	Port int `mapstructure:"port"`
 
@@ -482,7 +488,14 @@ func (cm *ConfigManager) Load(configPath string) error {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
-		// Config file not found; use defaults and environment variables
+		if configPath == "" {
+			cm.viper.SetConfigName("config")
+			if err := cm.viper.ReadInConfig(); err != nil {
+				if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+					return fmt.Errorf("failed to read config file: %w", err)
+				}
+			}
+		}
 	}
 
 	// Environment variables
@@ -635,7 +648,7 @@ func (cm *ConfigManager) setDefaults() {
 	v.SetDefault("adk.timeout", "2m")
 	v.SetDefault("adk.max_retries", 3)
 	v.SetDefault("adk.retry_delay", "1s")
-	v.SetDefault("adk.enabled", true)
+	v.SetDefault("adk.enabled", false)
 
 	// GitHub defaults
 	v.SetDefault("github.api_url", "https://api.github.com")
@@ -683,6 +696,9 @@ func (cm *ConfigManager) setDefaults() {
 
 // bindEnvVariables binds specific environment variables.
 func (cm *ConfigManager) bindEnvVariables() {
+	_ = cm.viper.BindEnv("server.api_key", "CSA_SERVER_API_KEY")
+	_ = cm.viper.BindEnv("server.gitlab_webhook_token", "CSA_GITLAB_WEBHOOK_TOKEN")
+
 	// Database
 	_ = cm.viper.BindEnv("database.host", "CSA_DATABASE_HOST", "POSTGRES_HOST")
 	_ = cm.viper.BindEnv("database.port", "CSA_DATABASE_PORT", "POSTGRES_PORT")

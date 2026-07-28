@@ -13,7 +13,8 @@ import (
 	"code-security-auditor/internal/api/handlers"
 	"code-security-auditor/internal/config"
 	"code-security-auditor/internal/database"
-	"code-security-auditor/internal/scanner/rules"
+	"code-security-auditor/internal/scanner"
+	"code-security-auditor/internal/service"
 	"code-security-auditor/pkg/logger"
 )
 
@@ -48,36 +49,19 @@ func main() {
 	}
 	defer redis.Close()
 
-	// Initialize rule engine
-	ruleEngine := rules.NewEngine(cfg.Scanner, log)
-	ruleEngine.Register(rules.NewSQLInjectionRule())
-	ruleEngine.Register(rules.NewXSSRule())
-	ruleEngine.Register(rules.NewSecretsRule())
-	ruleEngine.Register(rules.NewDependencyRule())
-
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(log, db, redis, "1.0.0")
-
-	// Note: In production, these would be properly injected services
-	var scanService handlers.ScanService // = services.NewScanService(...)
-	var aiService handlers.AIService     // = services.NewAIService(...)
-
-	scanHandler := handlers.NewScanHandler(scanService, aiService, ruleEngine, log)
-
-	var reportService handlers.ReportService // = services.NewReportService(...)
-	reportHandler := handlers.NewReportHandler(reportService, log)
-
-	var webhookService handlers.WebhookService // = services.NewWebhookService(...)
-	webhookHandler := handlers.NewWebhookHandler(webhookService, log)
+	scanRunner := scanner.NewManager(cfg.Scanner, cfg.Git, log)
+	scanStore := service.NewPostgresScanStore(db.DB)
+	scanService := service.NewScans(scanStore, scanRunner, cfg.Scanner, cfg.Git, log)
+	scanHandler := handlers.NewScanLifecycleHandler(scanService, log)
 
 	// Initialize router
 	router := api.NewRouter(api.RouterDeps{
-		Config:         cfg,
-		Logger:         log,
-		HealthHandler:  healthHandler,
-		ScanHandler:    scanHandler,
-		ReportHandler:  reportHandler,
-		WebhookHandler: webhookHandler,
+		Config:        cfg,
+		Logger:        log,
+		HealthHandler: healthHandler,
+		ScanHandler:   scanHandler,
 	})
 
 	// Create HTTP server

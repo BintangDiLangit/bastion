@@ -1,109 +1,61 @@
-# System Architecture
+# Architecture
 
-## Overview
-
-Code Security Auditor is a distributed system designed to perform scalable, automated security analysis of source code repositories. It combines static analysis (SAST) with AI-powered enhancements to detect vulnerabilities, secrets, and compliance issues.
-
-## System Diagram
+Bastion has one scanner core and three thin entry points.
 
 ```mermaid
-graph TD
-    User[User / CI System] -->|HTTP/REST| API[API Server]
-    API -->|Queue Job| Redis[Redis Queue]
-    API -->|Read/Write| DB[(PostgreSQL)]
-    
-    Worker[Worker Service] -->|Pop Job| Redis
-    Worker -->|Update Status| DB
-    
-    subgraph Scanner Core
-        Worker -->|Clone| Git[Git Manager]
-        Worker -->|Parse| Parser[Polyglot Parser]
-        Worker -->|Analyze| Analyzer[Rules Engine]
-    end
-    
-    subgraph AI Integration
-        Worker -->|Context| ADK[Google ADK Agent]
-        ADK -->|Insights| Worker
-    end
-    
-    subgraph External
-        Worker -->|Pull Code| GitHub[GitHub / GitLab]
-        Worker -->|Post Comment| GitHub
-    end
+flowchart LR
+    CLI[CLI] --> Scanner[Scanner core]
+    MCP[MCP stdio server] --> Scanner
+    API[HTTP API] --> Service[Scan lifecycle service]
+    Service --> Scanner
+    Service --> Git[Shallow HTTPS clone]
+    Service --> DB[(PostgreSQL)]
 ```
 
-## Components
+## Scanner core
 
-### 1. API Server (`cmd/api`)
-- **Role**: Entry point for users and webhooks.
-- **Tech**: Go, Gin Framework.
-- **Responsibilities**:
-    - Authentication & Authorization.
-    - Rate Limiting.
-    - Request validation.
-    - Job enqueuing (via Asynq/Redis).
-    - Data persistence (PostgreSQL).
+`internal/scanner` walks bounded source files and applies deterministic rules.
+It returns findings with stable fingerprints. Inline suppression is parsed
+before findings leave the scanner.
 
-### 2. Worker Service (`cmd/worker`)
-- **Role**: Asynchronous task processor.
-- **Tech**: Go, Asynq.
-- **Responsibilities**:
-    - Processing scan jobs from Redis.
-    - Executing Git operations (Clone/Diff).
-    - Running the Scanner Pipeline.
-    - interacting with AI Agent.
-    - Generating reports.
+The rules are fast pattern-based checks. They do not build a complete
+interprocedural data-flow graph, so findings require developer review.
 
-### 3. Database (`PostgreSQL`)
-- **Role**: Primary persistent store.
-- **Schema**:
-    - `users`: Account information.
-    - `repositories`: Monitored configs.
-    - `scans`: History of scan executions.
-    - `vulnerabilities`: Detected issues.
-    - `audit_logs`: System activity.
+## CLI
 
-### 4. Message Queue (`Redis`)
-- **Role**: Task queue and cache.
-- **Tech**: Redis, Asynq.
-- **Functions**:
-    - Reliability layer for scan jobs.
-    - Retry mechanism.
-    - Ephemeral caching for rate limiters.
+`cmd/cli` scans a local path and emits text, JSON, or SARIF. It needs no network,
+database, account, or API key.
 
-### 5. AI Agent (`Google ADK`)
-- **Role**: Intelligent analysis enhancement.
-- **Functions**:
-    - False positive reduction.
-    - Fix suggestion generation.
-    - Code context understanding.
+## MCP
 
-## Data Flow
+`cmd/mcp` exposes one read-only stdio tool, `bastion_scan`. A configured root,
+path containment checks, symlink checks, and file limits bound agent access.
+Optional baseline fingerprints produce a delta in the same response.
 
-### Scan Workflow
-1. **Trigger**: User POSTs to `/scans` or Webhook event occurs.
-2. **Queue**: API creates `Scan` record (status: `queued`) and pushes job to Redis.
-3. **Process**: Worker claims job.
-4. **Clone**: Git Manager clones repo to temp volume.
-5. **Parse**: Parser constructs AST and identifies file types.
-6. **Analyze**: Analyzer runs regex patterns and rules against AST.
-7. **AI Verify**: (Optional) High-severity findings sent to AI for verification.
-8. **Report**: Results saved to DB; notifications sent via Webhooks/GitHub.
+## API
 
-## Security Considerations
+`cmd/api` accepts authenticated scan requests. The lifecycle service:
 
-- **Secrets Management**: No secrets stored in code. Environment variables used for all sensitive keys.
-- **Sandboxing**: Scans run in ephemeral containers (planned feature).
-- **Input Validation**: Strict validation on all API inputs to prevent injection.
-- **Encryption**: TLS for all data in transit. At-rest encryption for DB volumes recommended.
+1. validates a public HTTPS repository URL against configured hosts;
+2. creates a pending PostgreSQL record;
+3. clones and scans asynchronously inside the API process;
+4. persists findings and fingerprints;
+5. serves status, findings, cancellation, and baseline comparison.
 
-## Scalability
+The prior completed scan of the same repository is the automatic delta
+baseline. An explicit completed scan from that repository may be selected.
 
-- **Horizontal Scaling**:
-    - **API**: Stateless, can scale behind load balancer.
-    - **Worker**: Can scale independently based on queue depth.
-- **Database**:
-    - Connection pooling.
-    - Read replicas for high-traffic reporting.
-- **Redis**:
-    - Cluster mode for high availability.
+## Trust boundaries
+
+- CLI and MCP keep code local.
+- MCP never writes through its tool contract.
+- API repository URLs are untrusted input.
+- API keys protect `/api/v1`; health routes are public.
+- Database credentials and API keys come from configuration or environment.
+
+## Deliberate non-features
+
+There is no hosted control plane, UI, webhook processing, automatic remediation,
+AI verdict engine, distributed worker, or scan sandbox. Those should not appear
+in deployment claims until their security properties are implemented and
+tested.

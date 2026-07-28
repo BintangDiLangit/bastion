@@ -1,4 +1,5 @@
 // Package rules provides the rule engine for vulnerability detection.
+// bastion:ignore-file RULE-DESER-001 detector signatures are data, not execution
 package rules
 
 import (
@@ -215,7 +216,7 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 
 	// Run registered rules
 	for id, rule := range e.rules {
-		if !e.IsEnabled(id) {
+		if len(e.enabledRules) > 0 && !e.enabledRules[id] {
 			continue
 		}
 
@@ -230,7 +231,69 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 	// Run pattern rules
 	findings = append(findings, e.runPatternRules(pf)...)
 
-	return findings
+	return applySuppressions(pf.GetLines(), findings)
+}
+
+func applySuppressions(lines []string, findings []Finding) []Finding {
+	fileRules := suppressionRules(lines, "bastion:ignore-file")
+	filtered := findings[:0]
+	for _, finding := range findings {
+		if suppresses(fileRules, finding.RuleID) {
+			continue
+		}
+		line := finding.Line - 1
+		if line >= 0 && line < len(lines) && suppresses(parseSuppression(lines[line], "bastion:ignore"), finding.RuleID) {
+			continue
+		}
+		if line > 0 && suppresses(parseSuppression(lines[line-1], "bastion:ignore-next-line"), finding.RuleID) {
+			continue
+		}
+		filtered = append(filtered, finding)
+	}
+	return filtered
+}
+
+func suppressionRules(lines []string, directive string) map[string]bool {
+	rules := make(map[string]bool)
+	for _, line := range lines {
+		for rule := range parseSuppression(line, directive) {
+			rules[rule] = true
+		}
+	}
+	return rules
+}
+
+func parseSuppression(line, directive string) map[string]bool {
+	rules := make(map[string]bool)
+	index := strings.Index(strings.ToLower(line), directive)
+	if index < 0 || !hasCommentMarker(line[:index]) {
+		return rules
+	}
+	after := index + len(directive)
+	if after < len(line) && line[after] != ' ' && line[after] != '\t' {
+		return rules
+	}
+	value := line[after:]
+	if end := strings.IndexAny(value, "\r\n"); end >= 0 {
+		value = value[:end]
+	}
+	for _, rule := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	}) {
+		rules[strings.ToLower(rule)] = true
+	}
+	return rules
+}
+
+func hasCommentMarker(prefix string) bool {
+	return strings.Contains(prefix, "//") ||
+		strings.Contains(prefix, "#") ||
+		strings.Contains(prefix, "/*") ||
+		strings.Contains(prefix, "<!--")
+}
+
+func suppresses(rules map[string]bool, ruleID string) bool {
+	return rules["all"] || rules[strings.ToLower(ruleID)]
 }
 
 // AnalyzeWithAdapter runs analysis on a file using the adapter pattern.

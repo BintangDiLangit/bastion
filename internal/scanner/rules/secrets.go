@@ -1,5 +1,7 @@
 package rules
 
+// bastion:ignore-file secrets detector signatures are data, not credentials
+
 import (
 	"fmt"
 	"regexp"
@@ -249,7 +251,7 @@ func (r *SecretsRule) initPatterns() {
 		},
 		{
 			name:        "basic_auth",
-			pattern:     `(?i)(basic\s+)[A-Za-z0-9+/]+=*`,
+			pattern:     `(?i)\bbasic\s+[A-Za-z0-9+/]{12,}={0,2}\b`,
 			description: "Basic Auth Credentials",
 			severity:    SeverityHigh,
 			confidence:  0.8,

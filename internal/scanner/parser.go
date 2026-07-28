@@ -1,4 +1,5 @@
 // Package scanner provides code scanning and analysis functionality.
+// bastion:ignore-file RULE-DESER-001 detector signatures are data, not execution
 package scanner
 
 import (
