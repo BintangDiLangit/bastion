@@ -3,12 +3,8 @@ package scanner
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,68 +30,44 @@ func TestNewGitManager(t *testing.T) {
 }
 
 func TestValidateRepositoryURL(t *testing.T) {
+	hosts := []string{"github.com", "gitlab.com"}
+
 	tests := []struct {
 		name    string
 		url     string
 		hosts   []string
 		wantErr bool
 	}{
-		{
-			name:    "Valid HTTPS",
-			url:     "https://github.com/user/repo",
-			wantErr: false,
-		},
-		{
-			name:    "Valid SSH",
-			url:     "git@github.com:user/repo.git",
-			wantErr: false, // scheme is not parsed from scp-like syntax easily by url.Parse, need to check implementation
-		},
-		{
-			name:    "Invalid Scheme",
-			url:     "ftp://github.com/user/repo",
-			wantErr: true,
-		},
-		{
-			name:    "Path Traversal",
-			url:     "https://github.com/../user/repo",
-			wantErr: true,
-		},
-		{
-			name:    "Allowed Host",
-			url:     "https://github.com/user/repo",
-			hosts:   []string{"github.com"},
-			wantErr: false,
-		},
-		{
-			name:    "Disallowed Host",
-			url:     "https://gitlab.com/user/repo",
-			hosts:   []string{"github.com"},
-			wantErr: true,
-		},
+		{name: "https on allowed host", url: "https://github.com/user/repo", hosts: hosts},
+		{name: "ssh on allowed host", url: "ssh://git@github.com/user/repo.git", hosts: hosts},
+		{name: "host match is case-insensitive", url: "https://GitHub.com/user/repo", hosts: hosts},
+		{name: "explicit port is allowed", url: "https://github.com:443/user/repo", hosts: hosts},
+
+		// The API clones URLs supplied by callers, so these must fail closed.
+		{name: "file scheme reads the server's own disk", url: "file:///etc", hosts: hosts, wantErr: true},
+		{name: "plain http is not encrypted", url: "http://github.com/user/repo", hosts: hosts, wantErr: true},
+		{name: "git protocol is unauthenticated", url: "git://github.com/user/repo", hosts: hosts, wantErr: true},
+		{name: "unknown scheme", url: "ftp://github.com/user/repo", hosts: hosts, wantErr: true},
+		{name: "scp syntax has no scheme", url: "git@github.com:user/repo.git", hosts: hosts, wantErr: true},
+		{name: "credentials in URL would be logged", url: "https://user:pw@github.com/a/b", hosts: hosts, wantErr: true},
+		{name: "disallowed host", url: "https://evil.example.com/user/repo", hosts: hosts, wantErr: true},
+		{name: "traversal in path", url: "https://github.com/../user/repo", hosts: hosts, wantErr: true},
+		{name: "empty URL", url: "", hosts: hosts, wantErr: true},
+
+		// An unconfigured allowlist is a misconfiguration, not a wildcard.
+		{name: "empty allowlist fails closed", url: "https://github.com/user/repo", hosts: nil, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.GitConfig{
-				TempDir:        os.TempDir(),
+				TempDir:        t.TempDir(),
 				SupportedHosts: tt.hosts,
 			}
-			manager, _ := NewGitManager(cfg, logrus.New())
+			manager, err := NewGitManager(cfg, logrus.New())
+			require.NoError(t, err)
 
-			// Skip SSH test if implementation relies on url.Parse which doesn't handle scp-like syntax well without scheme
-			// The current implementation uses url.Parse.
-			if tt.name == "Valid SSH" {
-				// We expect failure if url.Parse fails or if scheme (ssh) is missing
-				// The implementation checks schemes: https, http, git, ssh
-				// "git@..." usually parses as opaque or no scheme.
-				// Let's adjust expectation based on implementation:
-				// If url.Parse fails, it returns error. "git@github.com..." might fail or have empty scheme.
-				// Let's skip checking this specific one deeply here or accept current behavior.
-				// Actually, let's just supply a URL with scheme for SSH to be safe for this unit test of ValidateRepositoryURL logic.
-				tt.url = "ssh://git@github.com/user/repo.git"
-			}
-
-			err := manager.ValidateRepositoryURL(tt.url)
+			err = manager.ValidateRepositoryURL(tt.url)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -105,60 +77,21 @@ func TestValidateRepositoryURL(t *testing.T) {
 	}
 }
 
-func TestCloneRepository(t *testing.T) {
-	// Setup: Create a local bare repository to clone from
-	originPath, err := os.MkdirTemp("", "origin-repo")
-	require.NoError(t, err)
-	defer os.RemoveAll(originPath)
-
-	// Initialize bare repo
-	r, err := git.PlainInit(originPath, false)
-	require.NoError(t, err)
-
-	// Create a commit
-	w, err := r.Worktree()
-	require.NoError(t, err)
-
-	testFile := filepath.Join(originPath, "test.txt")
-	err = os.WriteFile(testFile, []byte("hello world"), 0644)
-	require.NoError(t, err)
-
-	_, err = w.Add("test.txt")
-	require.NoError(t, err)
-
-	_, err = w.Commit("Initial commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Test User",
-			Email: "test@example.com",
-			When:  time.Now(),
-		},
-	})
-	require.NoError(t, err)
-
-	// Setup Manager
-	tempDir, err := os.MkdirTemp("", "clone-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
+// Clone is rejected before any network or disk work when the URL fails
+// validation. The happy path needs a real remote and is not exercised here.
+func TestCloneRejectsUnvalidatedURL(t *testing.T) {
 	cfg := config.GitConfig{
-		TempDir:             tempDir,
+		TempDir:             t.TempDir(),
 		MaxConcurrentClones: 1,
-		CloneTimeout:        10 * time.Second,
-		CloneDepth:          1,
-		MaxRepoSize:         10 * 1024 * 1024,
+		SupportedHosts:      []string{"github.com"},
 	}
 	manager, err := NewGitManager(cfg, logrus.New())
 	require.NoError(t, err)
 
-	// Test Clone
-	ctx := context.Background()
-	result, err := manager.CloneRepository(ctx, "file://"+originPath, "master") // file path as URL works for go-git
-	require.NoError(t, err)
-	assert.NotEmpty(t, result.Path)
-	assert.NotEmpty(t, result.CommitSHA)
-	assert.DirExists(t, result.Path)
-	assert.FileExists(t, filepath.Join(result.Path, "test.txt"))
+	_, err = manager.CloneRepository(context.Background(), "file:///tmp/whatever", "master")
+	require.Error(t, err)
 
-	// Cleanup
-	manager.Cleanup(result.Path)
+	entries, err := os.ReadDir(cfg.TempDir)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a rejected URL must not create a clone directory")
 }

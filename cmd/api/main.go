@@ -42,15 +42,8 @@ func main() {
 		log.WithError(err).Fatal("Failed to run migrations")
 	}
 
-	// Initialize Redis
-	redis, err := database.NewRedisClient(cfg.Redis, log)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to connect to Redis")
-	}
-	defer redis.Close()
-
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(log, db, redis, "1.0.0")
+	healthHandler := handlers.NewHealthHandler(log, db, "1.0.0")
 	scanRunner := scanner.NewManager(cfg.Scanner, cfg.Git, log)
 	scanStore := service.NewPostgresScanStore(db.DB)
 	scanService := service.NewScans(scanStore, scanRunner, cfg.Scanner, cfg.Git, log)

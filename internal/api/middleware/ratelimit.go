@@ -21,13 +21,11 @@ func RateLimiter(config RateLimiterConfig) gin.HandlerFunc {
 	limiter := newTokenBucketLimiter(config)
 
 	return func(c *gin.Context) {
-		// Get client identifier (API key or IP)
-		clientID := c.GetString("api_key_id")
-		if clientID == "" {
-			clientID = c.ClientIP()
-		}
-
-		allowed, remaining, resetAt := limiter.Allow(clientID)
+		// Keyed on the client IP, and deliberately mounted ahead of API-key
+		// auth so unauthenticated requests are throttled too. ClientIP is the
+		// real socket address: the router clears gin's trusted proxies, so a
+		// caller cannot mint fresh buckets with an X-Forwarded-For header.
+		allowed, remaining, resetAt := limiter.Allow(c.ClientIP())
 
 		// Set rate limit headers
 		c.Header("X-RateLimit-Limit", intToStr(config.Requests))
@@ -125,69 +123,4 @@ func (l *tokenBucketLimiter) cleanup() {
 
 func intToStr(i int) string {
 	return strconv.Itoa(i)
-}
-
-// SlidingWindowLimiter implements sliding window rate limiting.
-type SlidingWindowLimiter struct {
-	config  RateLimiterConfig
-	windows map[string]*slidingWindow
-	mu      sync.Mutex
-}
-
-type slidingWindow struct {
-	timestamps []time.Time
-}
-
-// NewSlidingWindowLimiter creates a new sliding window limiter.
-func NewSlidingWindowLimiter(config RateLimiterConfig) *SlidingWindowLimiter {
-	return &SlidingWindowLimiter{
-		config:  config,
-		windows: make(map[string]*slidingWindow),
-	}
-}
-
-// Allow checks if a request is allowed using sliding window.
-func (l *SlidingWindowLimiter) Allow(clientID string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	now := time.Now()
-	windowStart := now.Add(-l.config.Window)
-
-	w, exists := l.windows[clientID]
-	if !exists {
-		w = &slidingWindow{timestamps: make([]time.Time, 0)}
-		l.windows[clientID] = w
-	}
-
-	// Remove old timestamps
-	valid := make([]time.Time, 0)
-	for _, ts := range w.timestamps {
-		if ts.After(windowStart) {
-			valid = append(valid, ts)
-		}
-	}
-	w.timestamps = valid
-
-	// Check if under limit
-	if len(w.timestamps) >= l.config.Requests {
-		return false
-	}
-
-	// Add new timestamp
-	w.timestamps = append(w.timestamps, now)
-	return true
-}
-
-// Timeout adds request timeout middleware.
-func Timeout(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Create a context with timeout
-		// Note: This requires careful handling as Gin's context doesn't fully support cancellation
-
-		// Set a deadline header
-		c.Writer.Header().Set("X-Request-Timeout", timeout.String())
-
-		c.Next()
-	}
 }

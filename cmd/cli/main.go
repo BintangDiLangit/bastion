@@ -29,13 +29,13 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "csa",
-		Short: "Code Security Auditor - Automated security scanning",
-		Long: `Code Security Auditor (CSA) is a powerful tool for automated
-security scanning and vulnerability detection in code repositories.
+		Use:   "bastion",
+		Short: "Bastion - local-first security review for developers and AI agents",
+		Long: `Bastion scans source code with deterministic rules and produces stable
+finding fingerprints, so a scan can be compared with its baseline.
 
-It can detect various security issues including SQL injection, XSS,
-hardcoded secrets, vulnerable dependencies, and more.`,
+It detects SQL injection, XSS, hardcoded secrets, vulnerable dependencies,
+command injection, weak crypto, and insecure deserialization.`,
 		Version: version,
 	}
 
@@ -63,8 +63,6 @@ func scanCmd() *cobra.Command {
 		maxFiles       int
 		timeout        int
 		failOnCritical bool
-		apiKey         string
-		scanType       string
 	)
 
 	cmd := &cobra.Command{
@@ -74,19 +72,19 @@ func scanCmd() *cobra.Command {
 
 Examples:
   # Scan current directory
-  csa scan .
+  bastion scan .
 
   # Scan a specific directory
-  csa scan /path/to/project
+  bastion scan /path/to/project
 
   # Scan with specific rules
-  csa scan . --rules sql_injection,xss,secrets
+  bastion scan . --rules sql_injection,xss,secrets
 
   # Output in SARIF format
-  csa scan . --format sarif --output results.sarif
+  bastion scan . --format sarif --output results.sarif
 
   # Exclude paths
-  csa scan . --exclude vendor,node_modules`,
+  bastion scan . --exclude vendor,node_modules`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."
@@ -100,15 +98,11 @@ Examples:
 				maxFiles:       maxFiles,
 				timeout:        time.Duration(timeout) * time.Minute,
 				failOnCritical: failOnCritical,
-				apiKey:         apiKey,
-				scanType:       scanType,
 			})
 		},
 	}
 
 	cmd.Flags().BoolVar(&failOnCritical, "fail-on-critical", true, "fail execution if critical vulnerabilities are found")
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for reporting")
-	cmd.Flags().StringVar(&scanType, "scan-type", "full", "scan type (full, quick)")
 	cmd.Flags().StringSliceVarP(&excludePaths, "exclude", "e", nil, "paths to exclude (comma-separated)")
 	cmd.Flags().StringSliceVarP(&enableRules, "rules", "r", nil, "rules to enable (comma-separated)")
 	cmd.Flags().IntVarP(&maxFiles, "max-files", "m", 1000, "maximum files to scan")
@@ -124,8 +118,6 @@ type scanOptions struct {
 	maxFiles       int
 	timeout        time.Duration
 	failOnCritical bool
-	apiKey         string
-	scanType       string
 }
 
 // runScan executes the scan.
@@ -212,6 +204,9 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 		FilesScanned: result.FilesScanned,
 		LinesScanned: result.LinesScanned,
 		Summary:      buildSummary(result),
+		// Initialized, not nil: a clean scan must emit [] rather than null, or
+		// every consumer that iterates the field breaks on the good case.
+		Vulnerabilities: []VulnOutput{},
 	}
 
 	for _, v := range result.Vulnerabilities {
@@ -264,13 +259,21 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 	// Print summary
 	printSummary(scanOut.Summary, log)
 
-	// Exit with error code if vulnerabilities found
-	// Exit with error code if vulnerabilities found and fail-on-critical is set
-	if opts.failOnCritical && (scanOut.Summary.Critical > 0 || scanOut.Summary.High > 0) {
+	if shouldFail(scanOut.Summary, opts.failOnCritical) {
 		os.Exit(1)
 	}
 
 	return nil
+}
+
+// shouldFail reports whether the scan should exit non-zero.
+//
+// Critical only. The flag is named --fail-on-critical and the docs promise
+// exactly that; blocking on high as well made CI red on regex-only findings
+// and pushed people to --fail-on-critical=false, which disables the gate
+// entirely.
+func shouldFail(summary ScanSummary, failOnCritical bool) bool {
+	return failOnCritical && summary.Critical > 0
 }
 
 // ScanOutput represents CLI scan output.
@@ -347,8 +350,10 @@ func printSummary(summary ScanSummary, log *logrus.Logger) {
 	fmt.Printf("  🔵 Info:       %d\n", summary.Info)
 	fmt.Println("═══════════════════════════════════════════")
 
-	if summary.Critical > 0 || summary.High > 0 {
-		fmt.Println("⚠️  Critical or high severity issues found!")
+	if summary.Critical > 0 {
+		fmt.Println("⚠️  Critical severity issues found!")
+	} else if summary.High > 0 {
+		fmt.Println("⚠️  High severity issues found (does not fail the command).")
 	} else if summary.Total == 0 {
 		fmt.Println("✅ No vulnerabilities found!")
 	}
@@ -363,7 +368,7 @@ func toSARIF(output ScanOutput) ([]byte, error) {
 			{
 				"tool": map[string]interface{}{
 					"driver": map[string]interface{}{
-						"name":    "Code Security Auditor",
+						"name":    "Bastion",
 						"version": version,
 					},
 				},
@@ -376,8 +381,11 @@ func toSARIF(output ScanOutput) ([]byte, error) {
 }
 
 // buildSARIFResults builds SARIF results.
+//
+// The slice is initialized rather than declared: a nil slice marshals to
+// "results": null, which upload-sarif rejects. A clean scan is the common case.
 func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
-	var results []map[string]interface{}
+	results := []map[string]interface{}{}
 
 	for _, v := range vulns {
 		level := "warning"
@@ -386,6 +394,17 @@ func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
 			level = "error"
 		case "low", "info":
 			level = "note"
+		}
+
+		// SARIF requires startLine >= 1. endLine is optional, and emitting the
+		// zero value produced endLine < startLine, which is schema-invalid.
+		startLine := v.LineStart
+		if startLine < 1 {
+			startLine = 1
+		}
+		region := map[string]int{"startLine": startLine}
+		if v.LineEnd >= startLine {
+			region["endLine"] = v.LineEnd
 		}
 
 		results = append(results, map[string]interface{}{
@@ -403,10 +422,7 @@ func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
 						"artifactLocation": map[string]string{
 							"uri": v.FilePath,
 						},
-						"region": map[string]int{
-							"startLine": v.LineStart,
-							"endLine":   v.LineEnd,
-						},
+						"region": region,
 					},
 				},
 			},
@@ -465,15 +481,31 @@ func rulesCmd() *cobra.Command {
 			fmt.Println("Available Security Rules:")
 			fmt.Println("=========================")
 			fmt.Println()
+			fmt.Println("Any ID below works with --rules and in a bastion:ignore comment.")
+			fmt.Println("A category selects every rule in it.")
+			fmt.Println()
 
 			for _, rule := range engine.ListRules() {
 				info := rules.GetRuleInfo(rule)
-				fmt.Printf("ID:       %s\n", info.ID)
-				fmt.Printf("Name:     %s\n", info.Name)
-				fmt.Printf("Severity: %s\n", info.Severity)
-				fmt.Printf("Category: %s\n", info.Category)
+				fmt.Printf("ID:        %s\n", info.ID)
+				fmt.Printf("Name:      %s\n", info.Name)
+				fmt.Printf("Severity:  %s\n", info.Severity)
+				fmt.Printf("Category:  %s\n", info.Category)
 				if len(info.Languages) > 0 {
 					fmt.Printf("Languages: %v\n", info.Languages)
+				} else {
+					fmt.Printf("Languages: All\n")
+				}
+				fmt.Println()
+			}
+
+			for _, pattern := range engine.ListPatterns() {
+				fmt.Printf("ID:        %s\n", pattern.ID)
+				fmt.Printf("Name:      %s\n", pattern.Title)
+				fmt.Printf("Severity:  %s\n", pattern.Severity)
+				fmt.Printf("Category:  %s\n", pattern.Category)
+				if len(pattern.Languages) > 0 {
+					fmt.Printf("Languages: %v\n", pattern.Languages)
 				} else {
 					fmt.Printf("Languages: All\n")
 				}
@@ -493,7 +525,7 @@ func versionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Code Security Auditor v%s\n", version)
+			fmt.Printf("Bastion v%s\n", version)
 		},
 	}
 }

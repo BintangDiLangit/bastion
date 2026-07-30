@@ -11,13 +11,10 @@ services:
       - CSA_DATABASE_USER=user
       - CSA_DATABASE_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       - CSA_DATABASE_DBNAME=security_auditor
-      - CSA_REDIS_HOST=redis
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      
+
   postgres:
     image: postgres:15-alpine
     environment:
@@ -33,19 +30,6 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
-      
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
 
 volumes:
   postgres_data:
-  redis_data:

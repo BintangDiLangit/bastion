@@ -6,6 +6,7 @@ import (
 	"code-security-auditor/internal/config"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -171,7 +172,7 @@ func (e *RuleEngine) GetRule(ruleID string) (Rule, bool) {
 	return rule, ok
 }
 
-// ListRules returns all registered rules.
+// ListRules returns all registered rules, sorted by ID.
 func (e *RuleEngine) ListRules() []Rule {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -180,7 +181,23 @@ func (e *RuleEngine) ListRules() []Rule {
 	for _, rule := range e.rules {
 		rules = append(rules, rule)
 	}
+	sort.Slice(rules, func(i, j int) bool { return rules[i].ID() < rules[j].ID() })
 	return rules
+}
+
+// ListPatterns returns the built-in pattern rules, sorted by ID.
+//
+// These carry their own ID namespace (RULE-XXX-NNN) and are what `bastion
+// rules` was omitting — including RULE-DESER-001, which the README tells users
+// to type into a suppression comment.
+func (e *RuleEngine) ListPatterns() []*PatternRule {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	patterns := make([]*PatternRule, len(e.patterns))
+	copy(patterns, e.patterns)
+	sort.Slice(patterns, func(i, j int) bool { return patterns[i].ID < patterns[j].ID })
+	return patterns
 }
 
 // IsEnabled checks if a rule is enabled.
@@ -214,12 +231,11 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	// Run registered rules
-	for id, rule := range e.rules {
-		if len(e.enabledRules) > 0 && !e.enabledRules[id] {
-			continue
-		}
-
+	// Run registered rules.
+	// Rule selection is applied by the caller, over both ID namespaces at once
+	// (see scanner.filterByRules); filtering here as well would silently drop
+	// pattern rules, whose IDs never match a category selector.
+	for _, rule := range e.rules {
 		if !ruleAppliesToLanguage(rule.Languages(), pf.GetLanguage()) {
 			continue
 		}
@@ -230,6 +246,19 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 
 	// Run pattern rules
 	findings = append(findings, e.runPatternRules(pf)...)
+
+	// e.rules is a map, so the loop above visits rules in random order. Sort
+	// before returning: fingerprints fall back to an ordinal for findings that
+	// otherwise collide, and an unstable order makes that ordinal unstable.
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Line != findings[j].Line {
+			return findings[i].Line < findings[j].Line
+		}
+		if findings[i].RuleID != findings[j].RuleID {
+			return findings[i].RuleID < findings[j].RuleID
+		}
+		return findings[i].Column < findings[j].Column
+	})
 
 	return applySuppressions(pf.GetLines(), findings)
 }
@@ -245,7 +274,7 @@ func applySuppressions(lines []string, findings []Finding) []Finding {
 		if line >= 0 && line < len(lines) && suppresses(parseSuppression(lines[line], "bastion:ignore"), finding.RuleID) {
 			continue
 		}
-		if line > 0 && suppresses(parseSuppression(lines[line-1], "bastion:ignore-next-line"), finding.RuleID) {
+		if line > 0 && line <= len(lines) && suppresses(parseSuppression(lines[line-1], "bastion:ignore-next-line"), finding.RuleID) {
 			continue
 		}
 		filtered = append(filtered, finding)
@@ -263,24 +292,44 @@ func suppressionRules(lines []string, directive string) map[string]bool {
 	return rules
 }
 
+// parseSuppression extracts the rule IDs named by a suppression directive.
+//
+// Everything from the first "--" onward is the human reason and is NOT a rule
+// list. Tokenizing it too meant a reason such as
+//
+//	// bastion:ignore-next-line xss -- all inputs are escaped
+//
+// contributed the token "all", and suppresses() treats "all" as "every rule" —
+// so one word in a comment silently disabled the whole scanner for that line.
+//
+// Indexing is done entirely on the lowercased copy: ToLower can change byte
+// length (e.g. U+0130), so an offset found in the lowercased string does not
+// necessarily land on a rune boundary in the original.
 func parseSuppression(line, directive string) map[string]bool {
 	rules := make(map[string]bool)
-	index := strings.Index(strings.ToLower(line), directive)
-	if index < 0 || !hasCommentMarker(line[:index]) {
+
+	lower := strings.ToLower(line)
+	index := strings.Index(lower, directive)
+	if index < 0 || !hasCommentMarker(lower[:index]) {
 		return rules
 	}
 	after := index + len(directive)
-	if after < len(line) && line[after] != ' ' && line[after] != '\t' {
+	if after < len(lower) && lower[after] != ' ' && lower[after] != '\t' {
 		return rules
 	}
-	value := line[after:]
+
+	value := lower[after:]
 	if end := strings.IndexAny(value, "\r\n"); end >= 0 {
 		value = value[:end]
 	}
+	if reason := strings.Index(value, "--"); reason >= 0 {
+		value = value[:reason]
+	}
+
 	for _, rule := range strings.FieldsFunc(value, func(r rune) bool {
 		return r == ',' || r == ' ' || r == '\t'
 	}) {
-		rules[strings.ToLower(rule)] = true
+		rules[rule] = true
 	}
 	return rules
 }

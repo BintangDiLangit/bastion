@@ -43,6 +43,16 @@ func NewRouter(deps RouterDeps) *Router {
 
 	engine := gin.New()
 
+	// ClientIP() honours X-Forwarded-For / X-Real-IP for trusted proxies, and
+	// gin trusts every proxy by default. The rate limiter keys on ClientIP, so
+	// a caller could rotate that header and get an unlimited number of buckets.
+	// Trust nothing: ClientIP() then returns the real socket address.
+	// ponytail: if you deploy behind a load balancer, set this to that
+	// balancer's address rather than removing the call.
+	if err := engine.SetTrustedProxies(nil); err != nil {
+		deps.Logger.WithError(err).Warn("failed to clear trusted proxies")
+	}
+
 	router := &Router{
 		engine:        engine,
 		config:        deps.Config,

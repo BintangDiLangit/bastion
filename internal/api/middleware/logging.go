@@ -44,15 +44,15 @@ func RequestLogger(logger *logrus.Logger) gin.HandlerFunc {
 
 		// Build log fields
 		fields := logrus.Fields{
-			"request_id":  requestID,
-			"status":      status,
-			"method":      c.Request.Method,
-			"path":        path,
-			"latency":     latency.String(),
-			"latency_ms":  latency.Milliseconds(),
-			"ip":          c.ClientIP(),
-			"user_agent":  c.Request.UserAgent(),
-			"size":        size,
+			"request_id": requestID,
+			"status":     status,
+			"method":     c.Request.Method,
+			"path":       path,
+			"latency":    latency.String(),
+			"latency_ms": latency.Milliseconds(),
+			"ip":         c.ClientIP(),
+			"user_agent": c.Request.UserAgent(),
+			"size":       size,
 		}
 
 		if raw != "" {

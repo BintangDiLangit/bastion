@@ -70,3 +70,8 @@ tmp/
 # Debug
 debug/
 __debug_bin
+
+# Compiled CLI dropped at the repo root by an ad-hoc `go build`
+/cli
+/bastion
+/csa

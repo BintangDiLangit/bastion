@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"unicode"
@@ -235,16 +236,35 @@ type SecurityMarker struct {
 }
 
 // ParseRepository parses all files in a repository.
-func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedPaths []string) ([]*ParsedFile, error) {
+//
+// Files are returned sorted by path. Parsing runs concurrently, so append order
+// is nondeterministic; anything downstream that truncates, diffs, or assigns an
+// ordinal to a finding needs a stable order to be reproducible.
+//
+// The second return value lists files that were reached but could not be
+// parsed. A dropped file yields no findings, which is indistinguishable from a
+// clean file — and in a delta, indistinguishable from a fixed one.
+// maxFiles caps how many files are read; 0 falls back to the configured limit.
+// The cap is applied during the walk, in lexical order, so the scanned set is
+// the same on every run. Truncating the parsed slice afterwards is not, because
+// parsing is concurrent.
+func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedPaths []string, maxFiles int, pathPrefix string) ([]*ParsedFile, []ScanError, error) {
 	var files []*ParsedFile
+	var skipped []ScanError
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	// Create a semaphore to limit concurrent parsing
-	sem := make(chan struct{}, p.config.MaxConcurrent)
-	if p.config.MaxConcurrent <= 0 {
-		sem = make(chan struct{}, 4) // Default to 4 concurrent parsers
+	if maxFiles <= 0 {
+		maxFiles = p.config.MaxFilesPerScan
 	}
+
+	// Create a semaphore to limit concurrent parsing.
+	// The guard runs first: make() panics on a negative capacity.
+	concurrency := p.config.MaxConcurrent
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+	sem := make(chan struct{}, concurrency)
 
 	fileCount := 0
 
@@ -271,8 +291,15 @@ func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedP
 			return nil
 		}
 
+		// Only regular files. Walk uses Lstat, so a symlink is not a directory
+		// and would otherwise be read through — letting a link inside the scan
+		// tree pull in any file the process can reach.
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
 		// Check file count limit
-		if p.config.MaxFilesPerScan > 0 && fileCount >= p.config.MaxFilesPerScan {
+		if maxFiles > 0 && fileCount >= maxFiles {
 			return filepath.SkipAll
 		}
 
@@ -303,6 +330,9 @@ func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedP
 		}
 
 		fileCount++
+		if pathPrefix != "" {
+			relPath = filepath.ToSlash(filepath.Join(pathPrefix, relPath))
+		}
 
 		// Parse file concurrently
 		wg.Add(1)
@@ -319,6 +349,9 @@ func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedP
 			parsedFile, err := p.ParseFile(fp, lang)
 			if err != nil {
 				p.logger.WithError(err).Debugf("Failed to parse file: %s", fp)
+				mu.Lock()
+				skipped = append(skipped, ScanError{File: rp, Message: err.Error(), Phase: "parse"})
+				mu.Unlock()
 				return
 			}
 
@@ -334,7 +367,11 @@ func (p *Parser) ParseRepository(ctx context.Context, repoPath string, excludedP
 	})
 
 	wg.Wait()
-	return files, err
+
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	sort.Slice(skipped, func(i, j int) bool { return skipped[i].File < skipped[j].File })
+
+	return files, skipped, err
 }
 
 // ParseFile parses a single file.

@@ -13,7 +13,4 @@ func TestLoadExampleConfig(t *testing.T) {
 	if config.Git.TempDir != "/tmp/code-security-auditor/repos" {
 		t.Fatalf("git temp dir = %q", config.Git.TempDir)
 	}
-	if config.ADK.Enabled {
-		t.Fatal("example config must not enable unconfigured AI")
-	}
 }

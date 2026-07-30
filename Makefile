@@ -1,54 +1,39 @@
-# Code Security Auditor Makefile
+# Bastion Makefile
 
-# Go parameters
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
 
 # Binary names
 BINARY_API=bin/api
-BINARY_WORKER=bin/worker
-BINARY_CLI=bin/csa
+BINARY_CLI=bin/bastion
 BINARY_MCP=bin/bastion-mcp
 
-# Directories
 CMD_DIR=./cmd
-PKG_DIR=./pkg
-INTERNAL_DIR=./internal
 BIN_DIR=./bin
 
-# Build flags
 LDFLAGS=-ldflags "-w -s"
 BUILD_FLAGS=-trimpath
 
-# Version
-VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-
-.PHONY: all build clean test coverage lint fmt vet deps run-api run-worker run-cli docker help
+.PHONY: all build build-api build-cli build-mcp clean test coverage lint fmt vet deps \
+	run-api run-cli scan docker docker-up docker-down docker-logs \
+	migrate migrate-create migrate-reset setup tools help
 
 ## Default target
 all: clean deps lint test build
 
 ## Build all binaries
-build: build-api build-worker build-cli build-mcp
+build: build-api build-cli build-mcp
 
 ## Build API server
 build-api:
 	@echo "Building API server..."
 	@mkdir -p $(BIN_DIR)
 	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_API) $(CMD_DIR)/api
-
-## Build worker
-build-worker:
-	@echo "Building worker..."
-	@mkdir -p $(BIN_DIR)
-	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_WORKER) $(CMD_DIR)/worker
 
 ## Build CLI
 build-cli:
@@ -71,19 +56,19 @@ clean:
 ## Run tests
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -race -cover ./...
+	$(GOTEST) -race -cover ./...
 
 ## Run tests with coverage report
 coverage:
 	@echo "Running tests with coverage..."
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTEST) -race -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
 ## Run linter
 lint:
 	@echo "Running linter..."
-	@if command -v golangci-lint &> /dev/null; then \
+	@if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run ./...; \
 	else \
 		echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
@@ -110,11 +95,6 @@ run-api: build-api
 	@echo "Running API server..."
 	$(BINARY_API)
 
-## Run worker
-run-worker: build-worker
-	@echo "Running worker..."
-	$(BINARY_WORKER)
-
 ## Run CLI
 run-cli: build-cli
 	@echo "Running CLI..."
@@ -127,21 +107,21 @@ scan: build-cli
 ## Build Docker images
 docker:
 	@echo "Building Docker images..."
-	docker-compose -f deployments/docker/docker-compose.yml build
+	docker compose -f deployments/docker/docker-compose.yml build
 
 ## Start Docker services
 docker-up:
 	@echo "Starting Docker services..."
-	docker-compose -f deployments/docker/docker-compose.yml up -d
+	docker compose -f deployments/docker/docker-compose.yml up -d
 
 ## Stop Docker services
 docker-down:
 	@echo "Stopping Docker services..."
-	docker-compose -f deployments/docker/docker-compose.yml down
+	docker compose -f deployments/docker/docker-compose.yml down
 
 ## View Docker logs
 docker-logs:
-	docker-compose -f deployments/docker/docker-compose.yml logs -f
+	docker compose -f deployments/docker/docker-compose.yml logs -f
 
 ## Run database migrations
 migrate:
@@ -163,30 +143,20 @@ setup:
 	@echo "Setting up development environment..."
 	./scripts/setup.sh
 
-## Generate mocks for testing
-mocks:
-	@echo "Generating mocks..."
-	@if command -v mockgen &> /dev/null; then \
-		go generate ./...; \
-	else \
-		echo "mockgen not installed. Run: go install github.com/golang/mock/mockgen@latest"; \
-	fi
-
 ## Install development tools
 tools:
 	@echo "Installing development tools..."
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go install github.com/golang/mock/mockgen@latest
 
 ## Show help
 help:
-	@echo "Code Security Auditor - Available targets:"
+	@echo "Bastion - Available targets:"
 	@echo ""
 	@echo "  Build:"
 	@echo "    build         Build all binaries"
 	@echo "    build-api     Build API server"
-	@echo "    build-worker  Build background worker"
 	@echo "    build-cli     Build CLI tool"
+	@echo "    build-mcp     Build MCP server"
 	@echo "    clean         Remove build artifacts"
 	@echo ""
 	@echo "  Test & Quality:"
@@ -198,7 +168,6 @@ help:
 	@echo ""
 	@echo "  Run:"
 	@echo "    run-api       Run API server"
-	@echo "    run-worker    Run background worker"
 	@echo "    run-cli       Run CLI (use ARGS=\"...\" for arguments)"
 	@echo "    scan          Scan current directory"
 	@echo ""

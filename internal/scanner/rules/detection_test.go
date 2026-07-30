@@ -28,6 +28,32 @@ func TestXSSSignal(t *testing.T) {
 	}
 }
 
+// The README advertises seven languages. Every one of them has its own regex
+// table, and only Go and JavaScript had a fixture — a typo in any of the other
+// five would have shipped silently.
+func TestSQLInjectionPerLanguage(t *testing.T) {
+	rule := NewSQLInjectionRule()
+	for _, test := range []struct {
+		path     string
+		language string
+		line     string
+	}{
+		{"a.go", "go", `db.Query("SELECT * FROM users WHERE id=" + userID)`},
+		{"a.py", "python", `cursor.execute(f"SELECT * FROM users WHERE id={user_id}")`},
+		{"a.js", "javascript", "conn.query(`SELECT * FROM users WHERE id=${id}`)"},
+		{"a.ts", "typescript", "conn.query(`SELECT * FROM users WHERE id=${id}`)"},
+		{"a.java", "java", `stmt.executeQuery("SELECT * FROM users WHERE id=" + id);`},
+		{"a.php", "php", `mysqli_query($conn, "SELECT * FROM users WHERE id=" . $id);`},
+		{"a.rb", "ruby", `User.where("name = #{params[:name]}")`},
+	} {
+		t.Run(test.language, func(t *testing.T) {
+			if got := rule.Check(parsed(test.path, test.language, test.line)); len(got) == 0 {
+				t.Fatalf("%s: no finding for %q", test.language, test.line)
+			}
+		})
+	}
+}
+
 func TestSecretSignal(t *testing.T) {
 	rule := NewSecretsRule()
 	if got := rule.Check(parsed("app.go", "go", `header := "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="`)); len(got) != 1 {

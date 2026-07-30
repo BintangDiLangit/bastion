@@ -1,15 +1,16 @@
-# Code Security Auditor Configuration
-# Copy this to config.yaml and customize for your environment
+# Bastion API configuration
+# Only the API server reads this file. The CLI and the MCP server run without it.
+
+environment: development
 
 server:
   host: "0.0.0.0"
   port: 8080
   api_key: "" # Set via CSA_SERVER_API_KEY
-  gitlab_webhook_token: "" # Set via CSA_GITLAB_WEBHOOK_TOKEN
   read_timeout: "30s"
   write_timeout: "30s"
   shutdown_timeout: "10s"
-  mode: "release"  # debug, release, test
+  mode: "release" # debug, release, test
 
 database:
   host: "localhost"
@@ -22,48 +23,22 @@ database:
   max_idle_conns: 5
   conn_max_lifetime: "5m"
 
-redis:
-  host: "localhost"
-  port: 6379
-  password: ""
-  db: 0
-  pool_size: 10
-  min_idle_conns: 3
-  dial_timeout: "5s"
-  read_timeout: "3s"
-  write_timeout: "3s"
-
 git:
   temp_dir: "/tmp/code-security-auditor/repos"
   clone_timeout: "5m"
-  max_repo_size: 104857600  # 100MB
+  max_repo_size: 104857600 # 100MB
   supported_hosts: ["github.com", "gitlab.com", "bitbucket.org"]
   clone_depth: 1
   max_concurrent_clones: 5
 
-adk:
-  enabled: false
-  project_id: ""  # GCP Project ID
-  location: "us-central1"
-  model: "gemini-2.0-flash"
-  api_key: ""  # Google AI API Key (set via CSA_AGENT_API_KEY env var)
-  max_tokens: 8192
-  temperature: 0.1
-  timeout: "2m"
-
 scanner:
-  max_file_size: 1048576  # 1MB
+  max_file_size: 1048576 # 1MB
   max_files_per_scan: 1000
   timeout: "30m"
   max_concurrent: 4
-  enabled_rules:
-    - sql_injection
-    - xss
-    - secrets
-    - dependency
-    - hardcoded_credentials
-    - path_traversal
-    - command_injection
+  # Empty means every rule runs. Listing IDs here turns this into a filter and
+  # silently disables everything not named. Run `bastion rules` for valid IDs.
+  enabled_rules: []
   excluded_paths:
     - "vendor/"
     - "node_modules/"
@@ -80,28 +55,10 @@ scanner:
     - ".sum"
     - ".map"
 
-reporter:
-  output_dir: "/tmp/code-security-auditor/reports"
-  template_dir: "./templates"
-  enable_pdf: true
-  enable_github_pr: true
-  github_token: ""  # Set via CSA_REPORTER_GITHUB_TOKEN env var
-  gitlab_token: ""  # Set via CSA_REPORTER_GITLAB_TOKEN env var
-
-queue:
-  concurrency: 5
-  max_retries: 3
-  retry_delay: "10s"
-  shutdown_timeout: "30s"
-
 logging:
-  level: "info"  # debug, info, warn, error
-  format: "json"  # json, text
-  output: "stdout"  # stdout, file
-  file_path: "/var/log/code-security-auditor/app.log"
-  max_size: 100  # MB
-  max_backups: 3
-  max_age: 28  # days
+  level: "info" # debug, info, warn, error
+  format: "json" # json, text
+  output: "stdout" # stdout, file
 
 rate_limit:
   enabled: true

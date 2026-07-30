@@ -19,8 +19,9 @@ server, or a small self-hosted API.
 - **Auditable suppression:** suppress a specific rule with a reason in code.
 - **Useful output:** text for humans, JSON for automation, SARIF for code hosts.
 
-Supported source languages: Go, Python, JavaScript, TypeScript, Java, PHP, and
-Ruby.
+Rules are tuned for Go, Python, JavaScript, TypeScript, Java, PHP, and Ruby.
+Language-agnostic rules — secrets, weak crypto, dependency manifests — apply to
+every recognized text file.
 
 ## Try it in 60 seconds
 
@@ -36,27 +37,32 @@ Build a reusable binary:
 
 ```bash
 make build-cli
-./bin/csa scan /path/to/project
+./bin/bastion scan /path/to/project
 ```
 
 Useful commands:
 
 ```bash
 # Keep a machine-readable report
-./bin/csa scan . --format json --output bastion.json
+./bin/bastion scan . --format json --output bastion.json
 
 # Produce a GitHub-compatible SARIF report
-./bin/csa scan . --format sarif --output bastion.sarif
+./bin/bastion scan . --format sarif --output bastion.sarif
 
-# Select rules or exclude paths
-./bin/csa scan . --rules sql_injection,xss,secrets \
+# Select rules or exclude paths.
+# A selector matches a rule ID or a category, so this keeps both the
+# sql_injection rule and RULE-SQL-001.
+./bin/bastion scan . --rules sql_injection,xss,secrets \
   --exclude vendor,node_modules
 
 # Do not fail the command when a critical finding exists
-./bin/csa scan . --fail-on-critical=false
+./bin/bastion scan . --fail-on-critical=false
 ```
 
-Run `./bin/csa rules` to see the rules implemented by your installed version.
+`scan` exits non-zero only on a **critical** finding. High findings are
+reported and do not fail the command.
+
+Run `./bin/bastion rules` to see the rules implemented by your installed version.
 
 ## Connect an AI coding tool with MCP
 
@@ -81,9 +87,11 @@ Ask the agent: **“Run `bastion_scan` on this project and explain only new
 critical or high findings.”**
 
 The MCP server is read-only. It accepts relative paths inside `-root`, rejects
-path and symlink escapes, and limits scan size. Pass fingerprints from a prior
-result as `baseline_fingerprints` to receive new findings, resolved
-fingerprints, and an unchanged count.
+path and symlink escapes, never reads through a symlink inside the scan tree,
+and limits scan size. Pass fingerprints from a prior result as
+`baseline_fingerprints` to receive new findings, resolved fingerprints, and an
+unchanged count. Reported paths are relative to `-root`, so a scan of one
+subdirectory compares cleanly against a baseline taken from the whole tree.
 
 ## Suppress a reviewed false positive
 
@@ -99,6 +107,8 @@ Or suppress selected rules for an entire detector fixture:
 ```go
 // bastion:ignore-file secrets,RULE-DESER-001 -- test signatures only
 ```
+
+Everything after `--` is a human reason and is never read as a rule ID.
 
 `all` is supported for generated files, though excluding the generated path is
 usually clearer.
