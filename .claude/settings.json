@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "aira": {
+      "source": {
+        "source": "github",
+        "repo": "aira-teknologi-indonesia/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "aira-core@aira": true
+  }
+}
