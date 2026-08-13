@@ -45,7 +45,8 @@ func main() {
 finding fingerprints, so a scan can be compared with its baseline.
 
 It detects SQL injection, XSS, hardcoded secrets, vulnerable dependencies,
-command injection, weak crypto, and insecure deserialization.`,
+command injection, weak crypto, insecure deserialization, SSRF, path
+traversal, insecure randomness, and disabled TLS verification.`,
 		Version: version,
 	}
 

@@ -532,6 +532,84 @@ func (e *RuleEngine) registerBuiltinRules() {
 		CWE:         "CWE-502",
 		Confidence:  0.85,
 	})
+
+	// Server-Side Request Forgery
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-SSRF-001",
+		Title:       "Potential Server-Side Request Forgery",
+		Pattern:     regexp.MustCompile(`(?i)(requests\.(get|post|put|head)|urllib\.request\.urlopen|http\.(Get|Post|NewRequest)|axios(\.(get|post))?|fetch|HttpClient|WebClient)\s*\(\s*[^)'"]*(url|uri|target|endpoint|host|req\.|request\.|params|input|user)`),
+		Severity:    SeverityHigh,
+		Category:    CategorySSRF,
+		Description: "An HTTP request appears to use a caller-controlled URL, which may allow server-side request forgery",
+		Remediation: "Validate and allow-list the destination host; reject internal and link-local addresses; never pass raw user input to an HTTP client.",
+		CWE:         "CWE-918",
+		Confidence:  0.55,
+	})
+
+	// Path Traversal
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-PATH-001",
+		Title:       "Potential Path Traversal",
+		Pattern:     regexp.MustCompile(`(?i)(os\.open|ioutil\.readfile|os\.readfile|fs\.readfile(sync)?|readfile|sendfile|open)\s*\([^)]*(\.\.\/|req\.|request\.|params|input|user|filename|filepath)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryPathTraversal,
+		Description: "A file path is built from caller-controlled input, which may allow directory traversal",
+		Remediation: "Resolve the path and confirm it stays within an allowed base directory; reject '..' segments; prefer a fixed file map over user-supplied names.",
+		CWE:         "CWE-22",
+		Confidence:  0.55,
+	})
+
+	// Insecure Randomness
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-RAND-001",
+		Title:       "Insecure Randomness for a Security Value",
+		Pattern:     regexp.MustCompile(`(?i)(token|secret|password|passwd|otp|nonce|session|salt|api[_-]?key|csrf|reset)\w*\s*[:=].*(math\.random|rand\.(intn|int|read|float64)|random\.(random|randint|choice|randrange))`),
+		Severity:    SeverityHigh,
+		Category:    CategoryInsecureRandom,
+		Description: "A security-sensitive value is generated with a non-cryptographic random source, making it predictable",
+		Remediation: "Use a cryptographically secure generator: crypto/rand (Go), the secrets module (Python), crypto.randomBytes (Node.js).",
+		CWE:         "CWE-338",
+		Confidence:  0.7,
+	})
+
+	// Weak Cryptographic Hash (SHA-1)
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-CRYPTO-002",
+		Title:       "Weak Cryptographic Hash (SHA-1)",
+		Pattern:     regexp.MustCompile(`(?i)(\bsha1\s*\(|hashlib\.sha1|createHash\(\s*['"]sha-?1['"]|MessageDigest\.getInstance\(\s*['"]sha-?1['"]|crypto/sha1)`),
+		Severity:    SeverityMedium,
+		Category:    CategoryWeakCrypto,
+		Description: "SHA-1 is cryptographically weak and unsuitable for signatures or integrity guarantees",
+		Remediation: "Use SHA-256 or stronger. For password storage use bcrypt, scrypt, or Argon2.",
+		CWE:         "CWE-328",
+		Confidence:  0.85,
+	})
+
+	// Weak or Insecure Cipher
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-CRYPTO-003",
+		Title:       "Weak or Insecure Cipher",
+		Pattern:     regexp.MustCompile(`(?i)(\bDES\b|\bRC4\b|Cipher\.getInstance\(\s*['"](des|desede|rc4|aes/ecb)|MODE_ECB|createCipheriv\(\s*['"](des|rc4)|/ECB/)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryWeakCrypto,
+		Description: "A weak cipher or insecure mode (DES, RC4, or ECB) is in use",
+		Remediation: "Use AES-GCM or ChaCha20-Poly1305 with a random nonce; never use ECB mode, DES, or RC4.",
+		CWE:         "CWE-327",
+		Confidence:  0.7,
+	})
+
+	// TLS Certificate Verification Disabled
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-TLS-001",
+		Title:       "TLS Certificate Verification Disabled",
+		Pattern:     regexp.MustCompile(`(?i)(verify\s*=\s*False|rejectUnauthorized\s*:\s*false|InsecureSkipVerify\s*:\s*true|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|ssl\._create_unverified_context)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryMisconfiguration,
+		Description: "TLS certificate verification is disabled, exposing connections to man-in-the-middle attacks",
+		Remediation: "Enable certificate verification and trust a proper CA bundle; never disable verification in production.",
+		CWE:         "CWE-295",
+		Confidence:  0.9,
+	})
 }
 
 // getCodeSnippet returns a code snippet around a line.

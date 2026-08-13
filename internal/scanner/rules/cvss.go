@@ -19,6 +19,9 @@ const (
 	vecXSS               = "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N" // 6.1
 	vecWeakHash          = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N" // 5.3
 	vecConfImpact        = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N" // 7.5
+	vecSSRF              = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:L/A:N" // 8.5
+	vecPredictable       = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N" // 5.9
+	vecMITM              = "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N" // 7.4
 )
 
 var cvssByRule = map[string]cvssInfo{
@@ -37,6 +40,12 @@ var cvssByRule = map[string]cvssInfo{
 	"RULE-CMD-001":    {9.8, vecNetworkFullImpact},
 	"RULE-CRYPTO-001": {5.3, vecWeakHash},
 	"RULE-DESER-001":  {9.8, vecNetworkFullImpact},
+	"RULE-SSRF-001":   {8.5, vecSSRF},
+	"RULE-PATH-001":   {7.5, vecConfImpact},
+	"RULE-RAND-001":   {5.9, vecPredictable},
+	"RULE-CRYPTO-002": {5.3, vecWeakHash},
+	"RULE-CRYPTO-003": {7.5, vecConfImpact},
+	"RULE-TLS-001":    {7.4, vecMITM},
 }
 
 // CVSSForRule returns the CVSS v3.1 base score and vector for a rule ID.
