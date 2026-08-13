@@ -17,10 +17,13 @@ type Engagement struct {
 }
 
 // Assessor is the person or team producing the reports (report cover metadata).
+// Logo + BrandColor make the report white-label for the assessing firm.
 type Assessor struct {
-	Name    string `mapstructure:"name"`
-	Company string `mapstructure:"company"`
-	Contact string `mapstructure:"contact"`
+	Name       string `mapstructure:"name"`
+	Company    string `mapstructure:"company"`
+	Contact    string `mapstructure:"contact"`
+	Logo       string `mapstructure:"logo"`        // path to a png/jpg/svg/gif/webp logo
+	BrandColor string `mapstructure:"brand_color"` // #rrggbb primary brand override
 }
 
 // Project is one application under assessment (Avora, Airapay, ...).

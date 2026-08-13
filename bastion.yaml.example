@@ -6,6 +6,9 @@ assessor:
   name: "Your Name"
   company: "Bastion Security"
   contact: "security@bastion.example"
+  # Optional white-label branding on the report cover + masthead:
+  # logo: /path/to/firm-logo.png    # png/jpg/svg/gif/webp, embedded (max 2MB)
+  # brand_color: "#123a5e"          # #rrggbb — recolors headings, cover, masthead
 
 projects:
   # Local source folder — nothing extra to configure.

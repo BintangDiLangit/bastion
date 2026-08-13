@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"strings"
 )
@@ -66,6 +67,9 @@ var funcMap = map[string]any{
 	"barPct":    barPct,
 	"cvssLabel": cvssLabel,
 	"dash":      dash,
+	// safeURL trusts a self-built data: URI (assessor logo) so html/template's
+	// URL filter doesn't neutralize it. Only ever fed CLI-built data URIs.
+	"safeURL": func(s string) template.URL { return template.URL(s) },
 }
 
 // cvssBand maps a base score to its qualitative rating.

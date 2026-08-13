@@ -39,6 +39,8 @@
   .logo-lg{width:76px;height:86px}
   .logo-sm{width:26px;height:29px}
   .logo-invert{color:#fff}
+  .cover-logo{max-width:300px;max-height:120px;background:#fff;padding:14px 20px;border-radius:10px;margin:0 auto}
+  .mh-logo{height:24px;width:auto}
 
   /* Cover — full navy panel: authority + SOC seriousness */
   .cover{min-height:96vh;background:linear-gradient(160deg,var(--brand-deep),var(--brand-mid));
@@ -114,7 +116,7 @@
   }
 </style>
 </head>
-<body>
+<body style="{{ .BrandCSS }}">
 
 <!-- Brand mark: crenellated shield (fortress) + verified check (assurance) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -129,9 +131,13 @@
   <!-- COVER -->
   <section class="cover">
     <div class="cover-inner">
-      <svg class="logo logo-lg logo-invert"><use href="#bastion-mark"/></svg>
-      <div class="brandname">BASTION</div>
-      <div class="tagline">Security</div>
+      {{ if .LogoDataURI }}
+        <img class="cover-logo" src="{{ .LogoDataURI | safeURL }}" alt="{{ .Assessor.Company }}">
+      {{ else }}
+        <svg class="logo logo-lg logo-invert"><use href="#bastion-mark"/></svg>
+        <div class="brandname">BASTION</div>
+        <div class="tagline">Security</div>
+      {{ end }}
       <h1>Security Assessment Report</h1>
       <div class="sub">Static Application Security Testing</div>
       <div class="client">{{ .Client }}</div>
@@ -156,8 +162,9 @@
 
   <!-- MASTHEAD -->
   <header class="masthead">
-    <span class="logo logo-sm"><svg viewBox="0 0 64 72"><use href="#bastion-mark"/></svg></span>
-    <span class="mh-name">Bastion</span><span class="mh-sub">· Security Assessment</span>
+    {{ if .LogoDataURI }}<img class="mh-logo" src="{{ .LogoDataURI | safeURL }}" alt="">
+    {{ else }}<span class="logo logo-sm"><svg viewBox="0 0 64 72"><use href="#bastion-mark"/></svg></span>{{ end }}
+    <span class="mh-name">{{ if .Assessor.Company }}{{ .Assessor.Company }}{{ else }}Bastion{{ end }}</span><span class="mh-sub">· Security Assessment</span>
     <span class="mh-right">{{ .Client }} · {{ .Confidentiality }}</span>
   </header>
 

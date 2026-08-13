@@ -120,6 +120,30 @@ func TestRenderMarkdownContent(t *testing.T) {
 	}
 }
 
+func TestRenderHTMLWithBranding(t *testing.T) {
+	in := sampleInput()
+	in.LogoDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
+	in.BrandColor = "#7b2d8e"
+	b, err := RenderHTML(FromInput(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if !strings.Contains(html, "data:image/png;base64,iVBORw0KGgo") {
+		t.Error("logo data URI not embedded (may have been URL-filtered)")
+	}
+	if !strings.Contains(html, "class=\"cover-logo\"") {
+		t.Error("cover logo img not rendered")
+	}
+	if !strings.Contains(html, "--brand:#7b2d8e") {
+		t.Error("brand color override not applied")
+	}
+	// Still self-contained: the logo is inline data, not a remote fetch.
+	if strings.Contains(html, "src=\"http") {
+		t.Error("report is not self-contained")
+	}
+}
+
 func TestRenderCleanScan(t *testing.T) {
 	in := sampleInput()
 	in.Result.Vulnerabilities = nil

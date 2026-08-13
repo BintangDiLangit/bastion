@@ -4,6 +4,7 @@
 package report
 
 import (
+	"html/template"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +24,8 @@ type Input struct {
 	ToolName    string
 	ToolVersion string
 	GeneratedAt time.Time
+	LogoDataURI string // assessor firm logo as a data: URI (built by the CLI)
+	BrandColor  string // #rrggbb primary brand override
 }
 
 // ReportModel is the assembled, render-ready view.
@@ -36,6 +39,8 @@ type ReportModel struct {
 	ToolVersion     string
 	Scope           string
 	Confidentiality string
+	LogoDataURI     string
+	BrandCSS        template.CSS
 
 	Summary  SeverityCounts
 	Stats    Stats
@@ -217,6 +222,8 @@ func FromInput(in Input) ReportModel {
 		ToolVersion:     in.ToolVersion,
 		Scope:           in.Scope,
 		Confidentiality: "CONFIDENTIAL",
+		LogoDataURI:     in.LogoDataURI,
+		BrandCSS:        brandCSS(in.BrandColor),
 		Summary:         counts,
 		Stats:           Stats{ByCategory: byCategory, ByRule: byRule, AvgConfidence: avgConf},
 		Metrics:         res.Metrics,

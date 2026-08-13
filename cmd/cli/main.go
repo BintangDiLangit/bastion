@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -326,6 +327,11 @@ func runReport(projectName, configPath, formatArg string, opts scanOptions) erro
 		return fmt.Errorf("scan failed: %w", err)
 	}
 
+	logoURI, err := logoDataURI(eng.Assessor.Logo)
+	if err != nil {
+		return fmt.Errorf("logo: %w", err)
+	}
+
 	in := report.Input{
 		Assessor:    eng.Assessor,
 		Project:     *proj,
@@ -334,6 +340,8 @@ func runReport(projectName, configPath, formatArg string, opts scanOptions) erro
 		ToolName:    "Bastion",
 		ToolVersion: version,
 		GeneratedAt: time.Now(),
+		LogoDataURI: logoURI,
+		BrandColor:  eng.Assessor.BrandColor,
 	}
 
 	ctx := context.Background()
@@ -353,6 +361,38 @@ func runReport(projectName, configPath, formatArg string, opts scanOptions) erro
 		log.WithField("file", path).Info("Report written")
 	}
 	return nil
+}
+
+// logoDataURI reads an assessor logo file and encodes it as a self-contained
+// data: URI. Empty path -> empty URI (default Bastion mark is used).
+func logoDataURI(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	const maxLogo = 2 << 20 // 2MB keeps the report from bloating
+	if len(data) > maxLogo {
+		return "", fmt.Errorf("logo too large (%d bytes, max %d)", len(data), maxLogo)
+	}
+	var mime string
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		mime = "image/png"
+	case ".jpg", ".jpeg":
+		mime = "image/jpeg"
+	case ".svg":
+		mime = "image/svg+xml"
+	case ".gif":
+		mime = "image/gif"
+	case ".webp":
+		mime = "image/webp"
+	default:
+		return "", fmt.Errorf("unsupported logo type %q (want png/jpg/svg/gif/webp)", filepath.Ext(path))
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
 // reportFormats expands the --report-format value into concrete formats.
