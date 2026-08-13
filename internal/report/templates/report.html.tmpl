@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Assessment Report — {{ .Project }}</title>
+<style>
+  :root{
+    /* Ink & neutrals — sophisticated grays, generous whitespace = seriousness */
+    --fg:#1c2733; --muted:#5c6b7a; --line:#e3e8ee; --bg:#ffffff; --panel:#f5f8fb;
+    /* Brand — navy (trust/authority) + deep teal (confidence, "verified") + gold (seal) */
+    --brand:#123a5e; --brand-deep:#0c1f30; --brand-mid:#17466e;
+    --accent:#0f766e; --gold:#b0882f;
+    /* Severity — functional, conventional, unchanged */
+    --crit:#b3202c; --high:#d9601a; --med:#c99700; --low:#3a7d44; --info:#3f6d8f;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-family:var(--sans);color:var(--fg);background:var(--bg);margin:0;line-height:1.55;font-size:15px}
+  main{max-width:900px;margin:0 auto;padding:0 32px 64px}
+  h1,h2,h3{line-height:1.25;color:var(--brand)}
+  h2{font-size:1.35rem;margin:2.4rem 0 .8rem;padding-bottom:.35rem;border-bottom:2px solid var(--brand);letter-spacing:-.01em}
+  h3{font-size:1.05rem;margin:1.6rem 0 .5rem}
+  a{color:var(--accent)}
+  code,pre{font-family:var(--mono)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+  th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:.7rem}
+  .muted{color:var(--muted)}
+  .kv{display:grid;grid-template-columns:180px 1fr;gap:.3rem .8rem;margin:.6rem 0}
+  .kv dt{color:var(--muted)}
+  .kv dd{margin:0}
+
+  /* Logo mark */
+  .logo{display:inline-block;color:var(--brand)}
+  .logo svg,svg.logo{width:100%;height:100%;display:block}
+  .logo-lg{width:76px;height:86px}
+  .logo-sm{width:26px;height:29px}
+  .logo-invert{color:#fff}
+
+  /* Cover — full navy panel: authority + SOC seriousness */
+  .cover{min-height:96vh;background:linear-gradient(160deg,var(--brand-deep),var(--brand-mid));
+    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:48px 32px;break-after:page}
+  .cover-inner{max-width:640px}
+  .brandname{font-weight:700;letter-spacing:.42em;font-size:1.05rem;margin:1rem 0 .1rem;padding-left:.42em}
+  .tagline{color:#9fb6cc;font-size:.72rem;letter-spacing:.34em;text-transform:uppercase;padding-left:.34em}
+  .cover h1{color:#fff;font-size:2.5rem;margin:2.6rem 0 .3rem;letter-spacing:-.02em}
+  .cover .sub{color:#b7c7d6;font-size:1.05rem;margin:0 0 2.4rem}
+  .cover .client{font-size:1.6rem;font-weight:600}
+  .cover .proj{color:#9fb6cc;font-size:1rem;margin-top:.15rem}
+  .seal{margin:2.8rem auto 0;display:inline-flex;flex-direction:column;align-items:center;gap:.5rem}
+  .seal svg{width:64px;height:64px}
+  .seal .who{color:#cdd9e4;font-size:.86rem;line-height:1.4}
+  .seal .who .lbl{color:#7f97ad;font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;display:block;margin-bottom:.15rem}
+  .stamp{margin-top:2.6rem;display:inline-block;border:1px solid rgba(255,255,255,.45);color:#e7eef4;
+    font-size:.68rem;letter-spacing:.22em;padding:.3rem .9rem;border-radius:3px;font-weight:600}
+
+  /* Masthead on the body pages */
+  .masthead{display:flex;align-items:center;gap:.6rem;border-bottom:2px solid var(--brand);
+    padding:1.4rem 0 .8rem;margin-bottom:.4rem}
+  .masthead .mh-name{font-weight:700;letter-spacing:.06em;color:var(--brand)}
+  .masthead .mh-sub{color:var(--muted);font-size:.85rem}
+  .masthead .mh-right{margin-left:auto;color:var(--muted);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+
+  /* Severity badges + bars */
+  .badge{display:inline-block;min-width:64px;text-align:center;color:#fff;font-size:.7rem;font-weight:700;
+    letter-spacing:.05em;padding:.15rem .5rem;border-radius:3px;text-transform:uppercase}
+  .sev-critical{background:var(--crit)} .sev-high{background:var(--high)}
+  .sev-medium{background:var(--med);color:#3a3000} .sev-low{background:var(--low)} .sev-info{background:var(--info)}
+  .count-tiles{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.1rem 0}
+  .tile{flex:1;min-width:92px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:.8rem .5rem}
+  .tile.total{background:var(--brand);border-color:var(--brand)}
+  .tile.total .n,.tile.total .l{color:#fff}
+  .tile .n{font-size:1.7rem;font-weight:700;display:block;line-height:1.1}
+  .tile .l{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .bars{margin:1.1rem 0}
+  .bar-row{display:grid;grid-template-columns:90px 1fr 40px;align-items:center;gap:.6rem;margin:.35rem 0;font-size:.85rem}
+  .bar-track{background:var(--panel);border-radius:3px;height:15px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:3px}
+
+  /* Findings — white card, colored left border only (NOT a filled background;
+     the .sev-* classes also drive badge fills, so set background explicitly). */
+  .finding{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;
+    padding:1.1rem 1.3rem;margin:1.2rem 0}
+  .finding h3{color:var(--brand)}
+  .finding.sev-critical{border-left:5px solid var(--crit)}
+  .finding.sev-high{border-left:5px solid var(--high)}
+  .finding.sev-medium{border-left:5px solid var(--med)}
+  .finding.sev-low{border-left:5px solid var(--low)}
+  .finding.sev-info{border-left:5px solid var(--info)}
+  .finding h3{margin-top:.2rem}
+  .finding .fmeta{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;font-size:.82rem;color:var(--muted);margin:.5rem 0 .9rem}
+  .finding .fmeta b{color:var(--fg);font-weight:600}
+  pre.evidence{background:#0c1f30;color:#e6edf3;padding:.8rem 1rem;border-radius:6px;overflow-x:auto;
+    font-size:.82rem;line-height:1.5;white-space:pre;margin:.6rem 0}
+  .remediation{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:6px;padding:.8rem 1rem;white-space:pre-wrap;font-size:.9rem;margin:.6rem 0}
+  .label{font-weight:700;color:var(--accent);text-transform:uppercase;font-size:.68rem;letter-spacing:.06em;margin:.9rem 0 .2rem}
+  .reflist{margin:.3rem 0 0;padding-left:1.1rem;font-size:.85rem;word-break:break-all}
+  .toplink{font-size:.75rem;margin-top:.6rem}
+
+  @page{margin:16mm}
+  @media print{
+    main{max-width:none;padding:0}
+    a{color:var(--fg);text-decoration:none}
+    .toplink{display:none}
+    /* Keep small blocks intact; let long finding cards flow across pages so a
+       tall remediation never leaves a blank page before it. */
+    .tile,pre.evidence,.remediation,.bar-row{break-inside:avoid}
+    .finding h3{break-after:avoid}
+  }
+</style>
+</head>
+<body>
+
+<!-- Brand mark: crenellated shield (fortress) + verified check (assurance) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="bastion-mark" viewBox="0 0 64 72">
+    <path fill="currentColor" d="M10 15 V8 H20 V15 H27 V8 H37 V15 H44 V8 H54 V34
+      C54 50 44 62 32 68 C20 62 10 50 10 34 Z"/>
+    <path fill="none" stroke="#19a394" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"
+      d="M22 41 l7 8 l14 -16"/>
+  </symbol>
+</svg>
+
+  <!-- COVER -->
+  <section class="cover">
+    <div class="cover-inner">
+      <svg class="logo logo-lg logo-invert"><use href="#bastion-mark"/></svg>
+      <div class="brandname">BASTION</div>
+      <div class="tagline">Security</div>
+      <h1>Security Assessment Report</h1>
+      <div class="sub">Static Application Security Testing</div>
+      <div class="client">{{ .Client }}</div>
+      <div class="proj">{{ .Project }}</div>
+      <div class="seal">
+        <svg viewBox="0 0 80 80" aria-hidden="true">
+          <circle cx="40" cy="40" r="37" fill="none" stroke="var(--gold)" stroke-width="1.5"/>
+          <circle cx="40" cy="40" r="31" fill="none" stroke="var(--gold)" stroke-width="1" stroke-dasharray="2 3" opacity=".8"/>
+          <path d="M28 40 l8 9 l17 -20" fill="none" stroke="var(--gold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="who">
+          <span class="lbl">Prepared by</span>
+          {{ dash .Assessor.Name }}{{ if .Assessor.Company }}, {{ .Assessor.Company }}{{ end }}<br>
+          {{ .ReportDate }} · {{ .ToolName }} {{ .ToolVersion }}
+        </div>
+      </div>
+      <div class="stamp">{{ .Confidentiality }}</div>
+    </div>
+  </section>
+
+<main>
+
+  <!-- MASTHEAD -->
+  <header class="masthead">
+    <span class="logo logo-sm"><svg viewBox="0 0 64 72"><use href="#bastion-mark"/></svg></span>
+    <span class="mh-name">Bastion</span><span class="mh-sub">· Security Assessment</span>
+    <span class="mh-right">{{ .Client }} · {{ .Confidentiality }}</span>
+  </header>
+
+  <!-- DOCUMENT CONTROL -->
+  <h2 id="control">Document Control</h2>
+  <dl class="kv">
+    <dt>Client</dt><dd>{{ .Client }}</dd>
+    <dt>Application</dt><dd>{{ .Project }}</dd>
+    <dt>Assessor</dt><dd>{{ dash .Assessor.Name }}{{ if .Assessor.Company }} ({{ .Assessor.Company }}){{ end }}</dd>
+    <dt>Contact</dt><dd>{{ dash .Assessor.Contact }}</dd>
+    <dt>Report date</dt><dd>{{ .ReportDate }}</dd>
+    <dt>Scope</dt><dd>{{ dash .Scope }}</dd>
+    <dt>Classification</dt><dd>{{ .Confidentiality }}</dd>
+    <dt>Tooling</dt><dd>{{ .ToolName }} {{ .ToolVersion }}</dd>
+  </dl>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <h2 id="summary">Executive Summary</h2>
+  <p>
+    This report presents the results of a static application security assessment of
+    <b>{{ .Project }}</b>{{ if .Client }} for {{ .Client }}{{ end }}. The assessment analysed
+    {{ .ScanMeta.FilesScanned }} source files ({{ .ScanMeta.LinesScanned }} lines) using deterministic
+    detection rules and identified <b>{{ .Summary.Total }}</b> finding{{ if ne .Summary.Total 1 }}s{{ end }}
+    {{ if gt .Summary.Critical 0 }}, including <b>{{ .Summary.Critical }}</b> of critical severity requiring immediate attention{{ end }}.
+  </p>
+
+  <div class="count-tiles">
+    <div class="tile total"><span class="n">{{ .Summary.Total }}</span><span class="l">Total</span></div>
+    <div class="tile"><span class="n" style="color:var(--crit)">{{ .Summary.Critical }}</span><span class="l">Critical</span></div>
+    <div class="tile"><span class="n" style="color:var(--high)">{{ .Summary.High }}</span><span class="l">High</span></div>
+    <div class="tile"><span class="n" style="color:var(--med)">{{ .Summary.Medium }}</span><span class="l">Medium</span></div>
+    <div class="tile"><span class="n" style="color:var(--low)">{{ .Summary.Low }}</span><span class="l">Low</span></div>
+    <div class="tile"><span class="n" style="color:var(--info)">{{ .Summary.Info }}</span><span class="l">Info</span></div>
+  </div>
+
+  <div class="bars">
+    {{ $t := .Summary.Total }}
+    <div class="bar-row"><span>Critical</span><div class="bar-track"><div class="bar-fill sev-critical" style="width:{{ barPct .Summary.Critical $t }}%"></div></div><span>{{ .Summary.Critical }}</span></div>
+    <div class="bar-row"><span>High</span><div class="bar-track"><div class="bar-fill sev-high" style="width:{{ barPct .Summary.High $t }}%"></div></div><span>{{ .Summary.High }}</span></div>
+    <div class="bar-row"><span>Medium</span><div class="bar-track"><div class="bar-fill sev-medium" style="width:{{ barPct .Summary.Medium $t }}%"></div></div><span>{{ .Summary.Medium }}</span></div>
+    <div class="bar-row"><span>Low</span><div class="bar-track"><div class="bar-fill sev-low" style="width:{{ barPct .Summary.Low $t }}%"></div></div><span>{{ .Summary.Low }}</span></div>
+    <div class="bar-row"><span>Info</span><div class="bar-track"><div class="bar-fill sev-info" style="width:{{ barPct .Summary.Info $t }}%"></div></div><span>{{ .Summary.Info }}</span></div>
+  </div>
+
+  <!-- SCOPE & METHODOLOGY -->
+  <h2 id="methodology">Scope &amp; Methodology</h2>
+  <p><b>Scope.</b> {{ dash .Scope }}. The assessment covers application source code only; runtime,
+    infrastructure, and third-party hosted services are out of scope for this SAST engagement.</p>
+  <p><b>Methodology.</b> Source files were parsed and evaluated against deterministic detection rules
+    covering injection, cross-site scripting, hardcoded secrets, vulnerable dependencies, command
+    injection, weak cryptography, and insecure deserialization. Each finding carries a stable
+    fingerprint, a CWE reference where applicable, and a CVSS v3.1 base score. Findings are advisory
+    and should be validated in context before remediation.</p>
+
+  <!-- CODEBASE OVERVIEW -->
+  <h2 id="codebase">Codebase Overview</h2>
+  <dl class="kv">
+    <dt>Files analysed</dt><dd>{{ .Metrics.TotalFiles }}</dd>
+    <dt>Total lines</dt><dd>{{ .Metrics.TotalLines }}</dd>
+    <dt>Code / comment / blank</dt><dd>{{ .Metrics.CodeLines }} / {{ .Metrics.CommentLines }} / {{ .Metrics.BlankLines }}</dd>
+    <dt>Complexity score</dt><dd>{{ printf "%.1f" .Metrics.ComplexityScore }}</dd>
+    <dt>Duplication score</dt><dd>{{ printf "%.1f" .Metrics.DuplicationScore }}</dd>
+    <dt>Scan duration</dt><dd>{{ .ScanMeta.Duration }}</dd>
+  </dl>
+  {{ if .Metrics.LanguageBreakdown }}
+  <h3>Language breakdown</h3>
+  <table><thead><tr><th>Language</th><th>Files</th></tr></thead><tbody>
+    {{ range $lang, $n := .Metrics.LanguageBreakdown }}<tr><td>{{ title $lang }}</td><td>{{ $n }}</td></tr>{{ end }}
+  </tbody></table>
+  {{ end }}
+
+  <!-- FINDINGS SUMMARY -->
+  <h2 id="findings">Findings</h2>
+  {{ if not .Findings }}
+    <p class="muted">No findings were identified within the assessed scope.</p>
+  {{ else }}
+  <table>
+    <thead><tr><th>#</th><th>Severity</th><th>Finding</th><th>CWE</th><th>CVSS</th><th>Location</th></tr></thead>
+    <tbody>
+    {{ range .Findings }}
+      <tr>
+        <td>{{ .Index }}</td>
+        <td><span class="badge {{ sevClass .Severity }}">{{ .Severity }}</span></td>
+        <td><a href="#{{ .Anchor }}">{{ .Title }}</a></td>
+        <td>{{ if .CWE }}{{ join .CWE ", " }}{{ else }}—{{ end }}</td>
+        <td>{{ cvssLabel .CVSSScore }}</td>
+        <td class="muted">{{ .FilePath }}:{{ .LineStart }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+
+  <!-- FINDING DETAIL -->
+  {{ range .Findings }}
+  <div class="finding {{ sevClass .Severity }}" id="{{ .Anchor }}">
+    <h3>{{ .Index }}. {{ .Title }} <span class="badge {{ sevClass .Severity }}">{{ .Severity }}</span></h3>
+    <div class="fmeta">
+      <span><b>Rule:</b> {{ .RuleID }}</span>
+      <span><b>Category:</b> {{ title .Category }}</span>
+      <span><b>CWE:</b> {{ if .CWE }}{{ join .CWE ", " }}{{ else }}—{{ end }}</span>
+      <span><b>CVSS:</b> {{ cvssLabel .CVSSScore }}</span>
+      <span><b>Confidence:</b> {{ confPct .Confidence }}</span>
+      <span><b>Location:</b> {{ .FilePath }}:{{ .LineStart }}</span>
+    </div>
+    {{ if .CVSSVector }}<div class="muted" style="font-size:.78rem;font-family:var(--mono)">{{ .CVSSVector }}</div>{{ end }}
+    <p>{{ .Description }}</p>
+    {{ if .CodeSnippet }}<div class="label">Evidence</div><pre class="evidence">{{ .CodeSnippet }}</pre>{{ end }}
+    {{ if .Remediation }}<div class="label">Remediation</div><div class="remediation">{{ .Remediation }}</div>{{ end }}
+    {{ if or .OWASP .URLs }}<div class="label">References</div>
+      <ul class="reflist">
+        {{ range .OWASP }}<li><a href="{{ . }}">{{ . }}</a></li>{{ end }}
+        {{ range .URLs }}<li><a href="{{ . }}">{{ . }}</a></li>{{ end }}
+      </ul>{{ end }}
+    <div class="toplink"><a href="#findings">↑ back to findings</a></div>
+  </div>
+  {{ end }}
+  {{ end }}
+
+  <!-- REMEDIATION ROADMAP -->
+  {{ if .Roadmap }}
+  <h2 id="roadmap">Remediation Roadmap</h2>
+  <p>Findings are prioritised by severity. Suggested remediation targets:</p>
+  <table>
+    <thead><tr><th>Priority</th><th>Severity</th><th>Findings</th><th>Target</th></tr></thead>
+    <tbody>
+    {{ range .Roadmap }}
+      <tr><td>{{ .Priority }}</td><td><span class="badge {{ sevClass .Severity }}">{{ .Severity }}</span></td><td>{{ .Count }}</td><td>{{ .SLA }}</td></tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ end }}
+
+  <!-- APPENDIX -->
+  <h2 id="appendix">Appendix</h2>
+  <h3>Severity &amp; scoring</h3>
+  <p class="muted">Severities follow CVSS v3.1 base-score bands: Critical (9.0–10.0), High (7.0–8.9),
+    Medium (4.0–6.9), Low (0.1–3.9). Confidence reflects the detection rule's estimated precision, not
+    exploitability. All findings are produced by static analysis and should be manually validated.</p>
+  {{ if .ScanMeta.Errors }}
+  <h3>Scan notes ({{ len .ScanMeta.Errors }})</h3>
+  <table><thead><tr><th>File</th><th>Phase</th><th>Message</th></tr></thead><tbody>
+    {{ range .ScanMeta.Errors }}<tr><td class="muted">{{ .File }}</td><td>{{ .Phase }}</td><td>{{ .Message }}</td></tr>{{ end }}
+  </tbody></table>
+  {{ end }}
+  <p class="muted" style="font-size:.8rem;margin-top:2rem">
+    This document is {{ .Confidentiality }} and generated by {{ .ToolName }} {{ .ToolVersion }} on {{ .Generated }}.
+    It is provided for security remediation purposes and does not constitute a warranty of security.
+  </p>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+assessor:
+  name: "Test Assessor"
+  company: "Bastion Security"
+  contact: "sec@example.com"
+
+projects:
+  - name: avora
+    client: "Avora Inc."
+    source:
+      type: git
+      url: https://github.com/example/avora.git
+      branch: develop
+      token_env: AVORA_GIT_TOKEN
+  - name: sapa
+    client: "Sapa Ltd."
+    source:
+      type: local
+      path: /tmp/sapa

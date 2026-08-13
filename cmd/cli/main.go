@@ -2,11 +2,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,10 +17,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"code-security-auditor/internal/config"
+	"code-security-auditor/internal/engagement"
 	"code-security-auditor/internal/models"
+	"code-security-auditor/internal/report"
 	"code-security-auditor/internal/scanner"
 	"code-security-auditor/internal/scanner/rules"
 )
+
+// gitHosts is the clone allowlist for the CLI's git targets. The API server
+// keeps its own stricter, public-only validation.
+var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
 
 var (
 	version = "1.0.0"
@@ -45,8 +54,11 @@ command injection, weak crypto, and insecure deserialization.`,
 	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "", "output file path")
 	rootCmd.PersistentFlags().StringVarP(&format, "format", "f", "json", "output format (json, sarif, text)")
 
+	rootCmd.PersistentFlags().StringSliceVar(&gitHosts, "git-host", gitHosts, "allowed git clone hosts (repeatable)")
+
 	// Add commands
 	rootCmd.AddCommand(scanCmd())
+	rootCmd.AddCommand(reportCmd())
 	rootCmd.AddCommand(rulesCmd())
 	rootCmd.AddCommand(versionCmd())
 
@@ -120,26 +132,14 @@ type scanOptions struct {
 	failOnCritical bool
 }
 
-// runScan executes the scan.
+// runScan executes a scan of a local path and prints findings.
 func runScan(path string, opts scanOptions) error {
-	// Setup logger
-	log := logrus.New()
-	if verbose {
-		log.SetLevel(logrus.DebugLevel)
-	} else {
-		log.SetLevel(logrus.InfoLevel)
-	}
-	log.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp: true,
-	})
+	log := newLogger()
 
-	// Resolve path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
-
-	// Check path exists
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return fmt.Errorf("path does not exist: %w", err)
@@ -147,10 +147,29 @@ func runScan(path string, opts scanOptions) error {
 	if !info.IsDir() {
 		return fmt.Errorf("path is not a directory")
 	}
-
 	log.WithField("path", absPath).Info("Starting security scan")
 
-	// Load config
+	result, err := scanTarget(scanner.Target{Type: scanner.TargetSourceLocal, Path: absPath}, opts, log)
+	if err != nil {
+		return fmt.Errorf("scan failed: %w", err)
+	}
+	return outputResults(result, log, opts)
+}
+
+// newLogger builds the CLI logger, honouring the --verbose flag.
+func newLogger() *logrus.Logger {
+	log := logrus.New()
+	if verbose {
+		log.SetLevel(logrus.DebugLevel)
+	} else {
+		log.SetLevel(logrus.InfoLevel)
+	}
+	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	return log
+}
+
+// newManager builds a scan Manager with CLI-appropriate scanner and git config.
+func newManager(opts scanOptions, log *logrus.Logger) *scanner.Manager {
 	cfg := config.ScannerConfig{
 		MaxFileSize:        1048576, // 1MB
 		MaxFilesPerScan:    opts.maxFiles,
@@ -159,39 +178,197 @@ func runScan(path string, opts scanOptions) error {
 		ExcludedPaths:      append(defaultExcludedPaths(), opts.excludePaths...),
 		ExcludedExtensions: defaultExcludedExtensions(),
 	}
-
 	if len(opts.enableRules) > 0 {
 		cfg.EnabledRules = opts.enableRules
 	}
-
 	gitCfg := config.GitConfig{
-		TempDir:      os.TempDir(),
-		CloneTimeout: 5 * time.Minute,
+		TempDir:        filepath.Join(os.TempDir(), "bastion", "repos"),
+		CloneTimeout:   5 * time.Minute,
+		CloneDepth:     1,
+		MaxRepoSize:    104857600, // 100MB
+		SupportedHosts: gitHosts,
 	}
+	return scanner.NewManager(cfg, gitCfg, log)
+}
 
-	// Initialize scanner
-	mgr := scanner.NewManager(cfg, gitCfg, log)
-
-	// Create scan ID
-	scanID := uuid.New()
-
-	// Run scan
+// scanTarget runs a scan against any target type and returns the result.
+func scanTarget(target scanner.Target, opts scanOptions, log *logrus.Logger) (*scanner.ScanResult, error) {
+	mgr := newManager(opts, log)
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
-
-	result, err := mgr.ScanPath(ctx, scanID, absPath, scanner.ScanOptions{
+	return mgr.ScanTarget(ctx, uuid.New(), target, scanner.ScanOptions{
 		EnabledRules:  opts.enableRules,
 		ExcludedPaths: opts.excludePaths,
 		MaxFiles:      opts.maxFiles,
 		Timeout:       opts.timeout,
-		Branch:        "main", // Default branch for local scan if needed, though ScanPath handles local
+		Branch:        target.Branch,
 	})
+}
+
+// sourceToTarget maps an engagement source (local dir or git repo) to a scan
+// target, resolving a private-repo token from the environment when configured.
+func sourceToTarget(src engagement.Source) (scanner.Target, error) {
+	if err := src.Validate(); err != nil {
+		return scanner.Target{}, err
+	}
+	switch src.Type {
+	case "local":
+		abs, err := filepath.Abs(src.Path)
+		if err != nil {
+			return scanner.Target{}, fmt.Errorf("invalid source path: %w", err)
+		}
+		return scanner.Target{Type: scanner.TargetSourceLocal, Path: abs}, nil
+	case "git":
+		t := scanner.Target{Type: scanner.TargetSourceGit, URL: src.URL, Branch: src.Branch}
+		envName := src.TokenEnv
+		if envName == "" {
+			envName = "BASTION_GIT_TOKEN"
+		}
+		if tok := os.Getenv(envName); tok != "" {
+			t.Auth = scanner.TokenAuth(tok)
+		}
+		return t, nil
+	default:
+		return scanner.Target{}, fmt.Errorf("unknown source type %q", src.Type)
+	}
+}
+
+func scopeOf(target scanner.Target) string {
+	switch target.Type {
+	case scanner.TargetSourceLocal:
+		return "local: " + target.Path
+	case scanner.TargetSourceGit:
+		if target.Branch != "" {
+			return "git: " + target.URL + "@" + target.Branch
+		}
+		return "git: " + target.URL
+	default:
+		return string(target.Type)
+	}
+}
+
+// reportCmd creates the report command.
+func reportCmd() *cobra.Command {
+	var (
+		project      string
+		configPath   string
+		reportFormat string
+		excludePaths []string
+		enableRules  []string
+		maxFiles     int
+		timeout      int
+	)
+
+	cmd := &cobra.Command{
+		Use:   "report --project NAME",
+		Short: "Scan a configured project and produce a professional pentest report",
+		Long: `Scan an application configured in bastion.yaml and generate a client-grade
+security assessment report (HTML, Markdown, and/or PDF).
+
+Examples:
+  # HTML report for the 'avora' project
+  bastion report --project avora -o avora-report
+
+  # All formats (PDF needs a system Chrome/Chromium/Edge)
+  bastion report --project airapay --report-format all -o airapay-report`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runReport(project, configPath, reportFormat, scanOptions{
+				excludePaths: excludePaths,
+				enableRules:  enableRules,
+				maxFiles:     maxFiles,
+				timeout:      time.Duration(timeout) * time.Minute,
+			})
+		},
+	}
+
+	cmd.Flags().StringVar(&project, "project", "", "project name from the engagement config (required)")
+	cmd.Flags().StringVar(&configPath, "config-file", "bastion.yaml", "engagement config file")
+	cmd.Flags().StringVar(&reportFormat, "report-format", "html", "report format (html, md, pdf, all)")
+	cmd.Flags().StringSliceVarP(&excludePaths, "exclude", "e", nil, "paths to exclude (comma-separated)")
+	cmd.Flags().StringSliceVarP(&enableRules, "rules", "r", nil, "rules to enable (comma-separated)")
+	cmd.Flags().IntVarP(&maxFiles, "max-files", "m", 1000, "maximum files to scan")
+	cmd.Flags().IntVarP(&timeout, "timeout", "t", 30, "scan timeout in minutes")
+	_ = cmd.MarkFlagRequired("project")
+
+	return cmd
+}
+
+// runReport scans a configured project and writes the requested report formats.
+func runReport(projectName, configPath, formatArg string, opts scanOptions) error {
+	log := newLogger()
+
+	base := output
+	if strings.TrimSpace(base) == "" {
+		base = "report-" + projectName
+	}
+
+	formats, err := reportFormats(formatArg)
+	if err != nil {
+		return err
+	}
+
+	eng, err := engagement.Load(configPath)
+	if err != nil {
+		return err
+	}
+	proj, err := eng.Project(projectName)
+	if err != nil {
+		return err
+	}
+	target, err := sourceToTarget(proj.Source)
+	if err != nil {
+		return err
+	}
+
+	log.WithField("project", proj.Name).Info("Starting assessment")
+	result, err := scanTarget(target, opts, log)
 	if err != nil {
 		return fmt.Errorf("scan failed: %w", err)
 	}
 
-	// Output results
-	return outputResults(result, log, opts)
+	in := report.Input{
+		Assessor:    eng.Assessor,
+		Project:     *proj,
+		Result:      result,
+		Scope:       scopeOf(target),
+		ToolName:    "Bastion",
+		ToolVersion: version,
+		GeneratedAt: time.Now(),
+	}
+
+	ctx := context.Background()
+	for _, f := range formats {
+		var buf bytes.Buffer
+		if err := report.Render(ctx, &buf, in, f); err != nil {
+			if f == report.FormatPDF && errors.Is(err, report.ErrNoBrowser) {
+				log.Warn("PDF skipped: no Chrome/Chromium/Edge found; other formats still written")
+				continue
+			}
+			return fmt.Errorf("render %s: %w", f, err)
+		}
+		path := base + "." + f
+		if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		log.WithField("file", path).Info("Report written")
+	}
+	return nil
+}
+
+// reportFormats expands the --report-format value into concrete formats.
+func reportFormats(arg string) ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "", "html":
+		return []string{report.FormatHTML}, nil
+	case "md", "markdown":
+		return []string{report.FormatMarkdown}, nil
+	case "pdf":
+		return []string{report.FormatPDF}, nil
+	case "all":
+		return report.Formats, nil
+	default:
+		return nil, fmt.Errorf("unknown report format %q (want html|md|pdf|all)", arg)
+	}
 }
 
 // outputResults outputs the scan results.
@@ -204,6 +381,7 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 		FilesScanned: result.FilesScanned,
 		LinesScanned: result.LinesScanned,
 		Summary:      buildSummary(result),
+		Metrics:      result.Metrics,
 		// Initialized, not nil: a clean scan must emit [] rather than null, or
 		// every consumer that iterates the field breaks on the good case.
 		Vulnerabilities: []VulnOutput{},
@@ -223,6 +401,10 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 			CodeSnippet: v.CodeSnippet,
 			Remediation: v.Remediation,
 			Confidence:  v.Confidence,
+			CWE:         v.References.CWE,
+			OWASP:       v.References.OWASP,
+			CVSSScore:   v.CVSSScore,
+			CVSSVector:  v.CVSSVector,
 		})
 	}
 
@@ -278,13 +460,14 @@ func shouldFail(summary ScanSummary, failOnCritical bool) bool {
 
 // ScanOutput represents CLI scan output.
 type ScanOutput struct {
-	ScanID          string       `json:"scan_id"`
-	Timestamp       time.Time    `json:"timestamp"`
-	Duration        string       `json:"duration"`
-	FilesScanned    int          `json:"files_scanned"`
-	LinesScanned    int          `json:"lines_scanned"`
-	Summary         ScanSummary  `json:"summary"`
-	Vulnerabilities []VulnOutput `json:"vulnerabilities"`
+	ScanID          string              `json:"scan_id"`
+	Timestamp       time.Time           `json:"timestamp"`
+	Duration        string              `json:"duration"`
+	FilesScanned    int                 `json:"files_scanned"`
+	LinesScanned    int                 `json:"lines_scanned"`
+	Summary         ScanSummary         `json:"summary"`
+	Metrics         scanner.CodeMetrics `json:"metrics"`
+	Vulnerabilities []VulnOutput        `json:"vulnerabilities"`
 }
 
 // ScanSummary represents scan summary.
@@ -299,18 +482,22 @@ type ScanSummary struct {
 
 // VulnOutput represents vulnerability output.
 type VulnOutput struct {
-	RuleID      string  `json:"rule_id"`
-	Fingerprint string  `json:"fingerprint"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Severity    string  `json:"severity"`
-	Category    string  `json:"category"`
-	FilePath    string  `json:"file_path"`
-	LineStart   int     `json:"line_start"`
-	LineEnd     int     `json:"line_end"`
-	CodeSnippet string  `json:"code_snippet,omitempty"`
-	Remediation string  `json:"remediation,omitempty"`
-	Confidence  float64 `json:"confidence"`
+	RuleID      string   `json:"rule_id"`
+	Fingerprint string   `json:"fingerprint"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Severity    string   `json:"severity"`
+	Category    string   `json:"category"`
+	FilePath    string   `json:"file_path"`
+	LineStart   int      `json:"line_start"`
+	LineEnd     int      `json:"line_end"`
+	CodeSnippet string   `json:"code_snippet,omitempty"`
+	Remediation string   `json:"remediation,omitempty"`
+	Confidence  float64  `json:"confidence"`
+	CWE         []string `json:"cwe,omitempty"`
+	OWASP       []string `json:"owasp,omitempty"`
+	CVSSScore   float64  `json:"cvss_score,omitempty"`
+	CVSSVector  string   `json:"cvss_vector,omitempty"`
 }
 
 // buildSummary builds the scan summary.
