@@ -113,6 +113,25 @@ and limits scan size. Pass fingerprints from a prior result as
 unchanged count. Reported paths are relative to `-root`, so a scan of one
 subdirectory compares cleanly against a baseline taken from the whole tree.
 
+## Fix findings, don't just list them
+
+Every finding carries a machine-readable `fix` built from the matched code.
+Apply the safe, value-restoring ones (e.g. re-enabling disabled TLS
+verification) directly:
+
+```bash
+bastion fix .          # preview the safe fixes as a diff
+bastion fix . --write  # apply them
+```
+
+Findings whose secure form needs judgement (parameterizing a query, changing a
+hash) ship as `guidance`: the `fix.before`/`fix.after` pair tells an agent or a
+human exactly what to change without rewriting the code blindly.
+
+For agents, the [`security-review` skill](skills/security-review/SKILL.md)
+drives the whole loop — scan, triage, auto-fix, patch the rest, verify the
+delta, and report.
+
 ## Suppress a reviewed false positive
 
 Suppress one finding with its exact rule ID:
