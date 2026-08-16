@@ -23,65 +23,85 @@ Rules are tuned for Go, Python, JavaScript, TypeScript, Java, PHP, and Ruby.
 Language-agnostic rules — secrets, weak crypto, dependency manifests — apply to
 every recognized text file.
 
-## Try it in 60 seconds
+## Install
 
-Requires Go 1.25 or newer.
+**Homebrew** (macOS and Linux)
+
+```bash
+brew install --cask BintangDiLangit/tap/bastion
+```
+
+**Go** (requires Go 1.25 or newer)
+
+```bash
+go install github.com/BintangDiLangit/bastion/cmd/bastion@latest
+```
+
+**Docker** — no install at all
+
+```bash
+docker run --rm -v "$PWD:/src" ghcr.io/bintangdilangit/bastion
+```
+
+**Debian, RPM, Alpine** packages and prebuilt binaries for macOS, Linux and
+Windows are attached to every
+[release](https://github.com/BintangDiLangit/bastion/releases).
+
+**From source**
 
 ```bash
 git clone https://github.com/BintangDiLangit/bastion.git
-cd bastion
-go run ./cmd/bastion scan .
+cd bastion && make build-cli
 ```
 
-Build a reusable binary:
+## Try it in 60 seconds
 
 ```bash
-make build-cli
-./bin/bastion scan /path/to/project
+bastion scan .
 ```
 
 Useful commands:
 
 ```bash
 # Keep a machine-readable report
-./bin/bastion scan . --format json --output bastion.json
+bastion scan . --format json --output bastion.json
 
 # Produce a GitHub-compatible SARIF report
-./bin/bastion scan . --format sarif --output bastion.sarif
+bastion scan . --format sarif --output bastion.sarif
 
 # Select rules or exclude paths.
 # A selector matches a rule ID or a category, so this keeps both the
 # sql_injection rule and RULE-SQL-001.
-./bin/bastion scan . --rules sql_injection,xss,secrets \
+bastion scan . --rules sql_injection,xss,secrets \
   --exclude vendor,node_modules
 
 # Do not fail the command when a critical finding exists
-./bin/bastion scan . --fail-on-critical=false
+bastion scan . --fail-on-critical=false
 ```
 
 `scan` exits non-zero only on a **critical** finding. High findings are
 reported and do not fail the command.
 
-Run `./bin/bastion rules` to see the rules implemented by your installed version.
+Run `bastion rules` to see the rules implemented by your installed version.
 
 ## Connect an AI coding tool with MCP
 
-```bash
-make build-mcp
-```
-
-Add this server to an MCP client and replace both absolute paths:
+`bastion-mcp` ships alongside the CLI in every install method above (from
+source: `make build-mcp`). Add it to an MCP client, replacing the project path:
 
 ```json
 {
   "mcpServers": {
     "bastion": {
-      "command": "/absolute/path/to/bastion/bin/bastion-mcp",
+      "command": "bastion-mcp",
       "args": ["-root", "/absolute/path/to/project"]
     }
   }
 }
 ```
+
+If your client does not resolve `PATH`, use the absolute path that
+`which bastion-mcp` prints.
 
 Ask the agent: **“Run `bastion_scan` on this project and explain only new
 critical or high findings.”**

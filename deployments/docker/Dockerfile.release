@@ -1,0 +1,27 @@
+# Release image for the Bastion scanner, built by GoReleaser (dockers_v2).
+# It copies binaries GoReleaser already built; it never compiles. The build
+# context is laid out as <os>/<arch>/<binary>, which is what TARGETPLATFORM
+# expands to.
+FROM alpine:3.22
+
+ARG TARGETPLATFORM
+
+# ca-certificates: HTTPS clones and dependency lookups.
+# git:             `bastion scan <git-url>` clones the target repository.
+RUN apk add --no-cache ca-certificates git \
+    && adduser -D -u 10001 bastion
+
+COPY ${TARGETPLATFORM}/bastion     /usr/local/bin/bastion
+COPY ${TARGETPLATFORM}/bastion-mcp /usr/local/bin/bastion-mcp
+
+# Scanning is read-only. Running a security scanner as root over a source tree
+# the user mounted in is gratuitous risk.
+USER bastion
+WORKDIR /src
+
+# The zero-argument case does the obvious thing:
+#   docker run --rm -v "$PWD:/src" ghcr.io/bintangdilangit/bastion
+# Flags still override it, and the MCP server is reachable with
+#   --entrypoint /usr/local/bin/bastion-mcp
+ENTRYPOINT ["/usr/local/bin/bastion"]
+CMD ["scan", "/src"]
