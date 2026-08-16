@@ -14,9 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
 )
 
 const maxFindings = 200
@@ -107,7 +107,7 @@ func (s *Service) Server() *mcp.Server {
 }
 
 func (s *Service) Scan(ctx context.Context, _ *mcp.CallToolRequest, input ScanInput) (*mcp.CallToolResult, ScanOutput, error) {
-	path, err := s.resolveDirectory(input.Path)
+	path, prefix, err := s.resolveDirectory(input.Path)
 	if err != nil {
 		return nil, ScanOutput{}, err
 	}
@@ -129,6 +129,7 @@ func (s *Service) Scan(ctx context.Context, _ *mcp.CallToolRequest, input ScanIn
 	result, err := s.manager.ScanPath(ctx, uuid.New(), path, scanner.ScanOptions{
 		EnabledRules: input.Rules,
 		MaxFiles:     input.MaxFiles,
+		PathPrefix:   prefix,
 	})
 	if err != nil {
 		return nil, ScanOutput{}, err
@@ -207,32 +208,39 @@ func compareFingerprints(findings []models.Vulnerability, baseline []string) *Fi
 	return delta
 }
 
-func (s *Service) resolveDirectory(requested string) (string, error) {
+// resolveDirectory returns the absolute directory to scan and its path relative
+// to the configured root. The relative form becomes the reported path prefix so
+// that a subdirectory scan and a full-tree scan produce the same fingerprints
+// for the same finding.
+func (s *Service) resolveDirectory(requested string) (string, string, error) {
 	if requested == "" {
 		requested = "."
 	}
 	if filepath.IsAbs(requested) {
-		return "", fmt.Errorf("path must be relative to configured root")
+		return "", "", fmt.Errorf("path must be relative to configured root")
 	}
 
 	candidate, err := filepath.EvalSymlinks(filepath.Join(s.root, requested))
 	if err != nil {
-		return "", fmt.Errorf("resolve scan path: %w", err)
+		return "", "", fmt.Errorf("resolve scan path: %w", err)
 	}
 	candidate, err = filepath.Abs(candidate)
 	if err != nil {
-		return "", fmt.Errorf("resolve scan path: %w", err)
+		return "", "", fmt.Errorf("resolve scan path: %w", err)
 	}
 	relative, err := filepath.Rel(s.root, candidate)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path escapes configured root")
+		return "", "", fmt.Errorf("path escapes configured root")
 	}
 	info, err := os.Stat(candidate)
 	if err != nil {
-		return "", fmt.Errorf("inspect scan path: %w", err)
+		return "", "", fmt.Errorf("inspect scan path: %w", err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("path must be a directory")
+		return "", "", fmt.Errorf("path must be a directory")
 	}
-	return candidate, nil
+	if relative == "." {
+		relative = ""
+	}
+	return candidate, filepath.ToSlash(relative), nil
 }

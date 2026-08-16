@@ -3,9 +3,10 @@
 package rules
 
 import (
-	"code-security-auditor/internal/config"
 	"fmt"
+	"github.com/BintangDiLangit/bastion/internal/config"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -58,6 +59,13 @@ type Finding struct {
 	CWE         string   `json:"cwe,omitempty"`
 	Confidence  float64  `json:"confidence"`
 	References  []string `json:"references,omitempty"`
+
+	// Matched construct, used to build a suggested Fix from the real code.
+	// MatchStart/MatchEnd are 0-based byte offsets into the matched line;
+	// they feed the finding's column range and the auto-apply span.
+	MatchText  string `json:"match_text,omitempty"`
+	MatchStart int    `json:"-"`
+	MatchEnd   int    `json:"-"`
 }
 
 // ParsedFile interface to avoid import cycle
@@ -171,7 +179,7 @@ func (e *RuleEngine) GetRule(ruleID string) (Rule, bool) {
 	return rule, ok
 }
 
-// ListRules returns all registered rules.
+// ListRules returns all registered rules, sorted by ID.
 func (e *RuleEngine) ListRules() []Rule {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -180,7 +188,23 @@ func (e *RuleEngine) ListRules() []Rule {
 	for _, rule := range e.rules {
 		rules = append(rules, rule)
 	}
+	sort.Slice(rules, func(i, j int) bool { return rules[i].ID() < rules[j].ID() })
 	return rules
+}
+
+// ListPatterns returns the built-in pattern rules, sorted by ID.
+//
+// These carry their own ID namespace (RULE-XXX-NNN) and are what `bastion
+// rules` was omitting — including RULE-DESER-001, which the README tells users
+// to type into a suppression comment.
+func (e *RuleEngine) ListPatterns() []*PatternRule {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	patterns := make([]*PatternRule, len(e.patterns))
+	copy(patterns, e.patterns)
+	sort.Slice(patterns, func(i, j int) bool { return patterns[i].ID < patterns[j].ID })
+	return patterns
 }
 
 // IsEnabled checks if a rule is enabled.
@@ -214,12 +238,11 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	// Run registered rules
-	for id, rule := range e.rules {
-		if len(e.enabledRules) > 0 && !e.enabledRules[id] {
-			continue
-		}
-
+	// Run registered rules.
+	// Rule selection is applied by the caller, over both ID namespaces at once
+	// (see scanner.filterByRules); filtering here as well would silently drop
+	// pattern rules, whose IDs never match a category selector.
+	for _, rule := range e.rules {
 		if !ruleAppliesToLanguage(rule.Languages(), pf.GetLanguage()) {
 			continue
 		}
@@ -230,6 +253,19 @@ func (e *RuleEngine) Analyze(file interface{}) []Finding {
 
 	// Run pattern rules
 	findings = append(findings, e.runPatternRules(pf)...)
+
+	// e.rules is a map, so the loop above visits rules in random order. Sort
+	// before returning: fingerprints fall back to an ordinal for findings that
+	// otherwise collide, and an unstable order makes that ordinal unstable.
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Line != findings[j].Line {
+			return findings[i].Line < findings[j].Line
+		}
+		if findings[i].RuleID != findings[j].RuleID {
+			return findings[i].RuleID < findings[j].RuleID
+		}
+		return findings[i].Column < findings[j].Column
+	})
 
 	return applySuppressions(pf.GetLines(), findings)
 }
@@ -245,7 +281,7 @@ func applySuppressions(lines []string, findings []Finding) []Finding {
 		if line >= 0 && line < len(lines) && suppresses(parseSuppression(lines[line], "bastion:ignore"), finding.RuleID) {
 			continue
 		}
-		if line > 0 && suppresses(parseSuppression(lines[line-1], "bastion:ignore-next-line"), finding.RuleID) {
+		if line > 0 && line <= len(lines) && suppresses(parseSuppression(lines[line-1], "bastion:ignore-next-line"), finding.RuleID) {
 			continue
 		}
 		filtered = append(filtered, finding)
@@ -263,24 +299,44 @@ func suppressionRules(lines []string, directive string) map[string]bool {
 	return rules
 }
 
+// parseSuppression extracts the rule IDs named by a suppression directive.
+//
+// Everything from the first "--" onward is the human reason and is NOT a rule
+// list. Tokenizing it too meant a reason such as
+//
+//	// bastion:ignore-next-line xss -- all inputs are escaped
+//
+// contributed the token "all", and suppresses() treats "all" as "every rule" —
+// so one word in a comment silently disabled the whole scanner for that line.
+//
+// Indexing is done entirely on the lowercased copy: ToLower can change byte
+// length (e.g. U+0130), so an offset found in the lowercased string does not
+// necessarily land on a rune boundary in the original.
 func parseSuppression(line, directive string) map[string]bool {
 	rules := make(map[string]bool)
-	index := strings.Index(strings.ToLower(line), directive)
-	if index < 0 || !hasCommentMarker(line[:index]) {
+
+	lower := strings.ToLower(line)
+	index := strings.Index(lower, directive)
+	if index < 0 || !hasCommentMarker(lower[:index]) {
 		return rules
 	}
 	after := index + len(directive)
-	if after < len(line) && line[after] != ' ' && line[after] != '\t' {
+	if after < len(lower) && lower[after] != ' ' && lower[after] != '\t' {
 		return rules
 	}
-	value := line[after:]
+
+	value := lower[after:]
 	if end := strings.IndexAny(value, "\r\n"); end >= 0 {
 		value = value[:end]
 	}
+	if reason := strings.Index(value, "--"); reason >= 0 {
+		value = value[:reason]
+	}
+
 	for _, rule := range strings.FieldsFunc(value, func(r rune) bool {
 		return r == ',' || r == ' ' || r == '\t'
 	}) {
-		rules[strings.ToLower(rule)] = true
+		rules[rule] = true
 	}
 	return rules
 }
@@ -339,9 +395,10 @@ func (e *RuleEngine) runPatternRules(file ParsedFile) []Finding {
 			}
 
 			loc := pattern.Pattern.FindStringIndex(line)
-			column := 1
+			column, matchText, start, end := 1, "", 0, 0
 			if loc != nil {
 				column = loc[0] + 1
+				matchText, start, end = line[loc[0]:loc[1]], loc[0], loc[1]
 			}
 
 			findings = append(findings, Finding{
@@ -357,6 +414,9 @@ func (e *RuleEngine) runPatternRules(file ParsedFile) []Finding {
 				Remediation: pattern.Remediation,
 				CWE:         pattern.CWE,
 				Confidence:  pattern.Confidence,
+				MatchText:   matchText,
+				MatchStart:  start,
+				MatchEnd:    end,
 			})
 		}
 	}
@@ -482,6 +542,84 @@ func (e *RuleEngine) registerBuiltinRules() {
 		Remediation: "Use safe deserialization methods (yaml.safe_load, JSON)",
 		CWE:         "CWE-502",
 		Confidence:  0.85,
+	})
+
+	// Server-Side Request Forgery
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-SSRF-001",
+		Title:       "Potential Server-Side Request Forgery",
+		Pattern:     regexp.MustCompile(`(?i)(requests\.(get|post|put|head)|urllib\.request\.urlopen|http\.(Get|Post|NewRequest)|axios(\.(get|post))?|fetch|HttpClient|WebClient)\s*\(\s*[^)'"]*(url|uri|target|endpoint|host|req\.|request\.|params|input|user)`),
+		Severity:    SeverityHigh,
+		Category:    CategorySSRF,
+		Description: "An HTTP request appears to use a caller-controlled URL, which may allow server-side request forgery",
+		Remediation: "Validate and allow-list the destination host; reject internal and link-local addresses; never pass raw user input to an HTTP client.",
+		CWE:         "CWE-918",
+		Confidence:  0.55,
+	})
+
+	// Path Traversal
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-PATH-001",
+		Title:       "Potential Path Traversal",
+		Pattern:     regexp.MustCompile(`(?i)(os\.open|ioutil\.readfile|os\.readfile|fs\.readfile(sync)?|readfile|sendfile|open)\s*\([^)]*(\.\.\/|req\.|request\.|params|input|user|filename|filepath)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryPathTraversal,
+		Description: "A file path is built from caller-controlled input, which may allow directory traversal",
+		Remediation: "Resolve the path and confirm it stays within an allowed base directory; reject '..' segments; prefer a fixed file map over user-supplied names.",
+		CWE:         "CWE-22",
+		Confidence:  0.55,
+	})
+
+	// Insecure Randomness
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-RAND-001",
+		Title:       "Insecure Randomness for a Security Value",
+		Pattern:     regexp.MustCompile(`(?i)(token|secret|password|passwd|otp|nonce|session|salt|api[_-]?key|csrf|reset)\w*\s*[:=].*(math\.random|rand\.(intn|int|read|float64)|random\.(random|randint|choice|randrange))`),
+		Severity:    SeverityHigh,
+		Category:    CategoryInsecureRandom,
+		Description: "A security-sensitive value is generated with a non-cryptographic random source, making it predictable",
+		Remediation: "Use a cryptographically secure generator: crypto/rand (Go), the secrets module (Python), crypto.randomBytes (Node.js).",
+		CWE:         "CWE-338",
+		Confidence:  0.7,
+	})
+
+	// Weak Cryptographic Hash (SHA-1)
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-CRYPTO-002",
+		Title:       "Weak Cryptographic Hash (SHA-1)",
+		Pattern:     regexp.MustCompile(`(?i)(\bsha1\s*\(|hashlib\.sha1|createHash\(\s*['"]sha-?1['"]|MessageDigest\.getInstance\(\s*['"]sha-?1['"]|crypto/sha1)`),
+		Severity:    SeverityMedium,
+		Category:    CategoryWeakCrypto,
+		Description: "SHA-1 is cryptographically weak and unsuitable for signatures or integrity guarantees",
+		Remediation: "Use SHA-256 or stronger. For password storage use bcrypt, scrypt, or Argon2.",
+		CWE:         "CWE-328",
+		Confidence:  0.85,
+	})
+
+	// Weak or Insecure Cipher
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-CRYPTO-003",
+		Title:       "Weak or Insecure Cipher",
+		Pattern:     regexp.MustCompile(`(?i)(\bDES\b|\bRC4\b|Cipher\.getInstance\(\s*['"](des|desede|rc4|aes/ecb)|MODE_ECB|createCipheriv\(\s*['"](des|rc4)|/ECB/)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryWeakCrypto,
+		Description: "A weak cipher or insecure mode (DES, RC4, or ECB) is in use",
+		Remediation: "Use AES-GCM or ChaCha20-Poly1305 with a random nonce; never use ECB mode, DES, or RC4.",
+		CWE:         "CWE-327",
+		Confidence:  0.7,
+	})
+
+	// TLS Certificate Verification Disabled
+	e.RegisterPattern(&PatternRule{
+		ID:          "RULE-TLS-001",
+		Title:       "TLS Certificate Verification Disabled",
+		Pattern:     regexp.MustCompile(`(?i)(verify\s*=\s*False|rejectUnauthorized\s*:\s*false|InsecureSkipVerify\s*:\s*true|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|ssl\._create_unverified_context)`),
+		Severity:    SeverityHigh,
+		Category:    CategoryMisconfiguration,
+		Description: "TLS certificate verification is disabled, exposing connections to man-in-the-middle attacks",
+		Remediation: "Enable certificate verification and trust a proper CA bundle; never disable verification in production.",
+		CWE:         "CWE-295",
+		Confidence:  0.9,
 	})
 }
 

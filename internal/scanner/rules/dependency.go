@@ -211,6 +211,9 @@ func (r *DependencyRule) Check(file ParsedFile) []Finding {
 						CWE:         "CWE-1104",
 						Confidence:  0.9,
 						References:  r.GetReferences(),
+						// A dependency finding has no single matched span; the
+						// name+version is what a suggested fix reasons about.
+						MatchText: fmt.Sprintf("%s %s", dep.Name, dep.Version),
 					}
 					vulns = append(vulns, vuln)
 				}

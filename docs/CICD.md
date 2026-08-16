@@ -37,7 +37,7 @@ jobs:
           cache: true
       - name: Build Bastion
         working-directory: bastion
-        run: go build -o /tmp/bastion ./cmd/cli
+        run: go build -o /tmp/bastion ./cmd/bastion
       - name: Scan
         run: /tmp/bastion scan project --format sarif --output bastion.sarif
       - name: Upload SARIF
@@ -58,7 +58,7 @@ bastion:
   image: golang:1.25
   script:
     - git clone --depth 1 https://github.com/BintangDiLangit/bastion.git /tmp/bastion-src
-    - go build -C /tmp/bastion-src -o /tmp/bastion ./cmd/cli
+    - go build -C /tmp/bastion-src -o /tmp/bastion ./cmd/bastion
     - /tmp/bastion scan . --format json --output bastion.json
   artifacts:
     when: always

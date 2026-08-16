@@ -23,39 +23,39 @@ const (
 
 // Repository represents a code repository.
 type Repository struct {
-	ID             uuid.UUID          `db:"id" json:"id"`
-	Name           string             `db:"name" json:"name"`
-	FullName       string             `db:"full_name" json:"full_name"` // owner/repo
-	URL            string             `db:"url" json:"url"`
-	CloneURL       string             `db:"clone_url" json:"clone_url"`
-	Provider       RepositoryProvider `db:"provider" json:"provider"`
-	DefaultBranch  string             `db:"default_branch" json:"default_branch"`
-	Private        bool               `db:"private" json:"private"`
-	Description    string             `db:"description" json:"description"`
-	Language       string             `db:"language" json:"language"`
-	WebhookID      *string            `db:"webhook_id" json:"webhook_id,omitempty"`
-	WebhookSecret  *string            `db:"webhook_secret" json:"-"`
-	Settings       RepoSettings       `db:"settings" json:"settings"`
-	LastScanID     *uuid.UUID         `db:"last_scan_id" json:"last_scan_id,omitempty"`
-	LastScanAt     *time.Time         `db:"last_scan_at" json:"last_scan_at,omitempty"`
-	TotalScans     int                `db:"total_scans" json:"total_scans"`
-	CreatedAt      time.Time          `db:"created_at" json:"created_at"`
-	UpdatedAt      time.Time          `db:"updated_at" json:"updated_at"`
+	ID            uuid.UUID          `db:"id" json:"id"`
+	Name          string             `db:"name" json:"name"`
+	FullName      string             `db:"full_name" json:"full_name"` // owner/repo
+	URL           string             `db:"url" json:"url"`
+	CloneURL      string             `db:"clone_url" json:"clone_url"`
+	Provider      RepositoryProvider `db:"provider" json:"provider"`
+	DefaultBranch string             `db:"default_branch" json:"default_branch"`
+	Private       bool               `db:"private" json:"private"`
+	Description   string             `db:"description" json:"description"`
+	Language      string             `db:"language" json:"language"`
+	WebhookID     *string            `db:"webhook_id" json:"webhook_id,omitempty"`
+	WebhookSecret *string            `db:"webhook_secret" json:"-"`
+	Settings      RepoSettings       `db:"settings" json:"settings"`
+	LastScanID    *uuid.UUID         `db:"last_scan_id" json:"last_scan_id,omitempty"`
+	LastScanAt    *time.Time         `db:"last_scan_at" json:"last_scan_at,omitempty"`
+	TotalScans    int                `db:"total_scans" json:"total_scans"`
+	CreatedAt     time.Time          `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time          `db:"updated_at" json:"updated_at"`
 }
 
 // RepoSettings holds repository-specific settings.
 type RepoSettings struct {
-	AutoScanEnabled    bool     `json:"auto_scan_enabled"`
-	ScanOnPush         bool     `json:"scan_on_push"`
-	ScanOnPR           bool     `json:"scan_on_pr"`
-	ProtectedBranches  []string `json:"protected_branches"`
-	ExcludedPaths      []string `json:"excluded_paths"`
-	EnabledRules       []string `json:"enabled_rules"`
-	DisabledRules      []string `json:"disabled_rules"`
-	NotifyOnCritical   bool     `json:"notify_on_critical"`
-	NotifyOnHigh       bool     `json:"notify_on_high"`
-	FailPROnCritical   bool     `json:"fail_pr_on_critical"`
-	FailPROnHigh       bool     `json:"fail_pr_on_high"`
+	AutoScanEnabled   bool     `json:"auto_scan_enabled"`
+	ScanOnPush        bool     `json:"scan_on_push"`
+	ScanOnPR          bool     `json:"scan_on_pr"`
+	ProtectedBranches []string `json:"protected_branches"`
+	ExcludedPaths     []string `json:"excluded_paths"`
+	EnabledRules      []string `json:"enabled_rules"`
+	DisabledRules     []string `json:"disabled_rules"`
+	NotifyOnCritical  bool     `json:"notify_on_critical"`
+	NotifyOnHigh      bool     `json:"notify_on_high"`
+	FailPROnCritical  bool     `json:"fail_pr_on_critical"`
+	FailPROnHigh      bool     `json:"fail_pr_on_high"`
 }
 
 // Value implements the driver.Valuer interface.
@@ -69,12 +69,12 @@ func (s *RepoSettings) Scan(value interface{}) error {
 		*s = RepoSettings{}
 		return nil
 	}
-	
+
 	bytes, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")
 	}
-	
+
 	return json.Unmarshal(bytes, s)
 }
 
@@ -88,7 +88,7 @@ func NewRepository(repoURL string) (*Repository, error) {
 	provider := detectProvider(parsed.Host)
 	fullName := strings.TrimPrefix(parsed.Path, "/")
 	fullName = strings.TrimSuffix(fullName, ".git")
-	
+
 	parts := strings.Split(fullName, "/")
 	name := fullName
 	if len(parts) > 1 {
@@ -170,16 +170,16 @@ type RepositoryFilter struct {
 
 // RepositoryStats holds statistics about a repository.
 type RepositoryStats struct {
-	RepositoryID    uuid.UUID `json:"repository_id"`
-	TotalScans      int       `json:"total_scans"`
-	LastScanAt      *time.Time `json:"last_scan_at"`
-	TotalVulns      int       `json:"total_vulnerabilities"`
-	CriticalCount   int       `json:"critical_count"`
-	HighCount       int       `json:"high_count"`
-	MediumCount     int       `json:"medium_count"`
-	LowCount        int       `json:"low_count"`
-	ResolvedCount   int       `json:"resolved_count"`
-	TrendDirection  string    `json:"trend_direction"` // improving, worsening, stable
+	RepositoryID   uuid.UUID  `json:"repository_id"`
+	TotalScans     int        `json:"total_scans"`
+	LastScanAt     *time.Time `json:"last_scan_at"`
+	TotalVulns     int        `json:"total_vulnerabilities"`
+	CriticalCount  int        `json:"critical_count"`
+	HighCount      int        `json:"high_count"`
+	MediumCount    int        `json:"medium_count"`
+	LowCount       int        `json:"low_count"`
+	ResolvedCount  int        `json:"resolved_count"`
+	TrendDirection string     `json:"trend_direction"` // improving, worsening, stable
 }
 
 // RepositoryCreateRequest represents a request to add a repository.

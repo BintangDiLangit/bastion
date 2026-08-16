@@ -33,6 +33,38 @@ func TestApplyFileSuppression(t *testing.T) {
 	}
 }
 
+// The documented syntax puts a human reason after "--". That reason is prose,
+// not a rule list: tokenizing it meant a word like "all" in the explanation
+// suppressed every rule on the line.
+func TestSuppressionReasonIsNotARuleList(t *testing.T) {
+	lines := []string{
+		"// bastion:ignore-next-line xss -- all inputs are escaped by renderSafe",
+		"element.innerHTML = input",
+	}
+	got := applySuppressions(lines, []Finding{
+		{RuleID: "xss", Line: 2},
+		{RuleID: "secrets", Line: 2},
+	})
+	if len(got) != 1 || got[0].RuleID != "secrets" {
+		t.Fatalf("reason text acted as a rule selector: %#v", got)
+	}
+}
+
+// "all" is still a real selector when it is named as one.
+func TestSuppressionAllStillWorks(t *testing.T) {
+	lines := []string{
+		"// bastion:ignore-next-line all -- generated file",
+		"element.innerHTML = input",
+	}
+	got := applySuppressions(lines, []Finding{
+		{RuleID: "xss", Line: 2},
+		{RuleID: "secrets", Line: 2},
+	})
+	if len(got) != 0 {
+		t.Fatalf("explicit all did not suppress: %#v", got)
+	}
+}
+
 func TestSuppressionMustBeComment(t *testing.T) {
 	lines := []string{`value := "bastion:ignore all"`}
 	got := applySuppressions(lines, []Finding{{RuleID: "secrets", Line: 1}})

@@ -39,29 +39,14 @@ type Config struct {
 	// Database contains PostgreSQL database configuration.
 	Database DatabaseConfig `mapstructure:"database"`
 
-	// Redis contains Redis cache and queue configuration.
-	Redis RedisConfig `mapstructure:"redis"`
-
 	// Git contains Git operations configuration.
 	Git GitConfig `mapstructure:"git"`
 
 	// Scanner contains code scanner configuration.
 	Scanner ScannerConfig `mapstructure:"scanner"`
 
-	// ADK contains Google ADK/AI agent configuration.
-	ADK ADKConfig `mapstructure:"adk"`
-
-	// GitHub contains GitHub integration configuration.
-	GitHub GitHubConfig `mapstructure:"github"`
-
-	// Queue contains job queue configuration.
-	Queue QueueConfig `mapstructure:"queue"`
-
 	// Logging contains logging configuration.
 	Logging LoggingConfig `mapstructure:"logging"`
-
-	// Reporter contains report generation configuration.
-	Reporter ReporterConfig `mapstructure:"reporter"`
 
 	// RateLimit contains rate limiting configuration.
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
@@ -74,10 +59,6 @@ type Config struct {
 type ServerConfig struct {
 	// APIKey authenticates API requests. Set with CSA_SERVER_API_KEY.
 	APIKey string `mapstructure:"api_key"`
-
-	// GitLabWebhookToken verifies GitLab webhook requests.
-	GitLabWebhookToken string `mapstructure:"gitlab_webhook_token"`
-
 	// Port is the HTTP server port (1-65535).
 	Port int `mapstructure:"port"`
 
@@ -159,47 +140,6 @@ func (c DatabaseConfig) DSN() string {
 	)
 }
 
-// RedisConfig holds Redis configuration.
-type RedisConfig struct {
-	// Host is the Redis server host.
-	Host string `mapstructure:"host"`
-
-	// Port is the Redis server port.
-	Port int `mapstructure:"port"`
-
-	// Password is the Redis password.
-	Password string `mapstructure:"password"`
-
-	// DB is the Redis database number.
-	DB int `mapstructure:"db"`
-
-	// PoolSize is the connection pool size.
-	PoolSize int `mapstructure:"pool_size"`
-
-	// MinIdleConns is the minimum number of idle connections.
-	MinIdleConns int `mapstructure:"min_idle_conns"`
-
-	// DialTimeout is the timeout for establishing new connections.
-	DialTimeout time.Duration `mapstructure:"dial_timeout"`
-
-	// ReadTimeout is the timeout for socket reads.
-	ReadTimeout time.Duration `mapstructure:"read_timeout"`
-
-	// WriteTimeout is the timeout for socket writes.
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
-
-	// MaxRetries is the maximum number of retries.
-	MaxRetries int `mapstructure:"max_retries"`
-
-	// TLSEnabled enables TLS for Redis connections.
-	TLSEnabled bool `mapstructure:"tls_enabled"`
-}
-
-// Addr returns the Redis address.
-func (c RedisConfig) Addr() string {
-	return fmt.Sprintf("%s:%d", c.Host, c.Port)
-}
-
 // GitConfig holds Git operations configuration.
 type GitConfig struct {
 	// TempDir is the temporary directory for cloning repositories.
@@ -232,12 +172,6 @@ type ScannerConfig struct {
 	// Timeout is the maximum duration for a single scan.
 	Timeout time.Duration `mapstructure:"timeout"`
 
-	// EnabledLanguages is a list of programming languages to scan.
-	EnabledLanguages []string `mapstructure:"enabled_languages"`
-
-	// RulesPath is the path to the security rules configuration.
-	RulesPath string `mapstructure:"rules_path"`
-
 	// MaxFileSize is the maximum file size to scan in bytes.
 	MaxFileSize int64 `mapstructure:"max_file_size"`
 
@@ -250,98 +184,8 @@ type ScannerConfig struct {
 	// ExcludedExtensions is a list of file extensions to exclude.
 	ExcludedExtensions []string `mapstructure:"excluded_extensions"`
 
-	// EnableGosec enables gosec security scanner integration.
-	EnableGosec bool `mapstructure:"enable_gosec"`
-
-	// EnableStaticcheck enables staticcheck linter integration.
-	EnableStaticcheck bool `mapstructure:"enable_staticcheck"`
-
 	// EnabledRules is a list of enabled security rules.
 	EnabledRules []string `mapstructure:"enabled_rules"`
-
-	// CustomRulesPath is the path to custom security rules.
-	CustomRulesPath string `mapstructure:"custom_rules_path"`
-}
-
-// ADKConfig holds Google ADK/AI agent configuration.
-type ADKConfig struct {
-	// ProjectID is the Google Cloud project ID.
-	ProjectID string `mapstructure:"project_id"`
-
-	// Location is the Google Cloud region.
-	Location string `mapstructure:"location"`
-
-	// Model is the AI model to use (e.g., gemini-2.0-flash).
-	Model string `mapstructure:"model"`
-
-	// APIKey is the Google API key.
-	APIKey string `mapstructure:"api_key"`
-
-	// MaxTokens is the maximum number of tokens in the response.
-	MaxTokens int `mapstructure:"max_tokens"`
-
-	// Temperature controls the randomness of the output (0.0-1.0).
-	Temperature float64 `mapstructure:"temperature"`
-
-	// Timeout is the maximum duration for AI requests.
-	Timeout time.Duration `mapstructure:"timeout"`
-
-	// MaxRetries is the maximum number of retries for failed requests.
-	MaxRetries int `mapstructure:"max_retries"`
-
-	// RetryDelay is the delay between retries.
-	RetryDelay time.Duration `mapstructure:"retry_delay"`
-
-	// Enabled enables the AI agent features.
-	Enabled bool `mapstructure:"enabled"`
-}
-
-// GitHubConfig holds GitHub integration configuration.
-type GitHubConfig struct {
-	// AppID is the GitHub App ID.
-	AppID int64 `mapstructure:"app_id"`
-
-	// InstallationID is the GitHub App installation ID.
-	InstallationID int64 `mapstructure:"installation_id"`
-
-	// PrivateKeyPath is the path to the GitHub App private key.
-	PrivateKeyPath string `mapstructure:"private_key_path"`
-
-	// WebhookSecret is the secret for verifying GitHub webhooks.
-	WebhookSecret string `mapstructure:"webhook_secret"`
-
-	// Token is a personal access token (alternative to App authentication).
-	Token string `mapstructure:"token"`
-
-	// APIURL is the GitHub API base URL (for GitHub Enterprise).
-	APIURL string `mapstructure:"api_url"`
-
-	// EnablePRComments enables posting comments on pull requests.
-	EnablePRComments bool `mapstructure:"enable_pr_comments"`
-
-	// EnableCheckRuns enables creating GitHub check runs.
-	EnableCheckRuns bool `mapstructure:"enable_check_runs"`
-}
-
-// QueueConfig holds job queue configuration.
-type QueueConfig struct {
-	// Concurrency is the number of concurrent workers.
-	Concurrency int `mapstructure:"concurrency"`
-
-	// MaxRetries is the maximum number of retries for failed jobs.
-	MaxRetries int `mapstructure:"max_retries"`
-
-	// RetryDelay is the delay between retries.
-	RetryDelay time.Duration `mapstructure:"retry_delay"`
-
-	// ShutdownTimeout is the maximum duration to wait for jobs to complete on shutdown.
-	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
-
-	// DefaultPriority is the default job priority.
-	DefaultPriority int `mapstructure:"default_priority"`
-
-	// EnableScheduler enables the job scheduler.
-	EnableScheduler bool `mapstructure:"enable_scheduler"`
 }
 
 // LoggingConfig holds logging configuration.
@@ -372,33 +216,6 @@ type LoggingConfig struct {
 
 	// IncludeCaller includes caller information in logs.
 	IncludeCaller bool `mapstructure:"include_caller"`
-}
-
-// ReporterConfig holds report generation configuration.
-type ReporterConfig struct {
-	// OutputDir is the directory for generated reports.
-	OutputDir string `mapstructure:"output_dir"`
-
-	// TemplateDir is the directory containing report templates.
-	TemplateDir string `mapstructure:"template_dir"`
-
-	// EnablePDF enables PDF report generation.
-	EnablePDF bool `mapstructure:"enable_pdf"`
-
-	// EnableHTML enables HTML report generation.
-	EnableHTML bool `mapstructure:"enable_html"`
-
-	// EnableJSON enables JSON report generation.
-	EnableJSON bool `mapstructure:"enable_json"`
-
-	// EnableSARIF enables SARIF report generation.
-	EnableSARIF bool `mapstructure:"enable_sarif"`
-
-	// EnableGitHubPR enables GitHub PR comment reports.
-	EnableGitHubPR bool `mapstructure:"enable_github_pr"`
-
-	// RetentionDays is the number of days to retain reports.
-	RetentionDays int `mapstructure:"retention_days"`
 }
 
 // RateLimitConfig holds rate limiting configuration.
@@ -476,8 +293,8 @@ func (cm *ConfigManager) Load(configPath string) error {
 		cm.viper.SetConfigType("yaml")
 		cm.viper.AddConfigPath(".")
 		cm.viper.AddConfigPath("./configs")
-		cm.viper.AddConfigPath("/etc/code-security-auditor")
-		cm.viper.AddConfigPath("$HOME/.code-security-auditor")
+		cm.viper.AddConfigPath("/etc/bastion")
+		cm.viper.AddConfigPath("$HOME/.bastion")
 
 		// Load environment-specific config
 		cm.viper.SetConfigName(fmt.Sprintf("config.%s", env))
@@ -597,21 +414,8 @@ func (cm *ConfigManager) setDefaults() {
 	v.SetDefault("database.migrations_path", "./internal/database/migrations")
 	v.SetDefault("database.auto_migrate", true)
 
-	// Redis defaults
-	v.SetDefault("redis.host", "localhost")
-	v.SetDefault("redis.port", 6379)
-	v.SetDefault("redis.password", "")
-	v.SetDefault("redis.db", 0)
-	v.SetDefault("redis.pool_size", 10)
-	v.SetDefault("redis.min_idle_conns", 3)
-	v.SetDefault("redis.dial_timeout", "5s")
-	v.SetDefault("redis.read_timeout", "3s")
-	v.SetDefault("redis.write_timeout", "3s")
-	v.SetDefault("redis.max_retries", 3)
-	v.SetDefault("redis.tls_enabled", false)
-
 	// Git defaults
-	v.SetDefault("git.temp_dir", "/tmp/code-security-auditor/repos")
+	v.SetDefault("git.temp_dir", "/tmp/bastion/repos")
 	v.SetDefault("git.clone_timeout", "5m")
 	v.SetDefault("git.max_repo_size", 104857600) // 100MB
 	v.SetDefault("git.supported_hosts", []string{"github.com", "gitlab.com", "bitbucket.org"})
@@ -621,8 +425,6 @@ func (cm *ConfigManager) setDefaults() {
 	// Scanner defaults
 	v.SetDefault("scanner.max_concurrent", 4)
 	v.SetDefault("scanner.timeout", "30m")
-	v.SetDefault("scanner.enabled_languages", []string{"go", "python", "javascript", "typescript", "java", "php", "ruby"})
-	v.SetDefault("scanner.rules_path", "./configs/rules.yaml")
 	v.SetDefault("scanner.max_file_size", 1048576) // 1MB
 	v.SetDefault("scanner.max_files_per_scan", 10000)
 	v.SetDefault("scanner.excluded_paths", []string{
@@ -632,57 +434,20 @@ func (cm *ConfigManager) setDefaults() {
 	v.SetDefault("scanner.excluded_extensions", []string{
 		".min.js", ".min.css", ".lock", ".sum", ".map",
 	})
-	v.SetDefault("scanner.enable_gosec", true)
-	v.SetDefault("scanner.enable_staticcheck", true)
-	v.SetDefault("scanner.enabled_rules", []string{
-		"sql_injection", "xss", "secrets", "dependency",
-		"path_traversal", "command_injection", "ssrf",
-		"insecure_deserialization", "weak_crypto",
-	})
-
-	// ADK defaults
-	v.SetDefault("adk.location", "us-central1")
-	v.SetDefault("adk.model", "gemini-2.0-flash")
-	v.SetDefault("adk.max_tokens", 8192)
-	v.SetDefault("adk.temperature", 0.1)
-	v.SetDefault("adk.timeout", "2m")
-	v.SetDefault("adk.max_retries", 3)
-	v.SetDefault("adk.retry_delay", "1s")
-	v.SetDefault("adk.enabled", false)
-
-	// GitHub defaults
-	v.SetDefault("github.api_url", "https://api.github.com")
-	v.SetDefault("github.enable_pr_comments", true)
-	v.SetDefault("github.enable_check_runs", true)
-
-	// Queue defaults
-	v.SetDefault("queue.concurrency", 10)
-	v.SetDefault("queue.max_retries", 3)
-	v.SetDefault("queue.retry_delay", "30s")
-	v.SetDefault("queue.shutdown_timeout", "30s")
-	v.SetDefault("queue.default_priority", 0)
-	v.SetDefault("queue.enable_scheduler", true)
+	// Empty means every rule runs. A non-empty list is a filter, so a default
+	// listing rule IDs would silently disable anything not on it.
+	v.SetDefault("scanner.enabled_rules", []string{})
 
 	// Logging defaults
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 	v.SetDefault("logging.output", "stdout")
-	v.SetDefault("logging.file_path", "/var/log/code-security-auditor/app.log")
+	v.SetDefault("logging.file_path", "/var/log/bastion/app.log")
 	v.SetDefault("logging.max_size", 100)
 	v.SetDefault("logging.max_backups", 3)
 	v.SetDefault("logging.max_age", 28)
 	v.SetDefault("logging.compress", true)
 	v.SetDefault("logging.include_caller", false)
-
-	// Reporter defaults
-	v.SetDefault("reporter.output_dir", "/tmp/code-security-auditor/reports")
-	v.SetDefault("reporter.template_dir", "./templates")
-	v.SetDefault("reporter.enable_pdf", true)
-	v.SetDefault("reporter.enable_html", true)
-	v.SetDefault("reporter.enable_json", true)
-	v.SetDefault("reporter.enable_sarif", true)
-	v.SetDefault("reporter.enable_github_pr", true)
-	v.SetDefault("reporter.retention_days", 30)
 
 	// Rate limit defaults
 	v.SetDefault("rate_limit.enabled", true)
@@ -697,7 +462,6 @@ func (cm *ConfigManager) setDefaults() {
 // bindEnvVariables binds specific environment variables.
 func (cm *ConfigManager) bindEnvVariables() {
 	_ = cm.viper.BindEnv("server.api_key", "CSA_SERVER_API_KEY")
-	_ = cm.viper.BindEnv("server.gitlab_webhook_token", "CSA_GITLAB_WEBHOOK_TOKEN")
 
 	// Database
 	_ = cm.viper.BindEnv("database.host", "CSA_DATABASE_HOST", "POSTGRES_HOST")
@@ -706,18 +470,6 @@ func (cm *ConfigManager) bindEnvVariables() {
 	_ = cm.viper.BindEnv("database.password", "CSA_DATABASE_PASSWORD", "POSTGRES_PASSWORD")
 	_ = cm.viper.BindEnv("database.dbname", "CSA_DATABASE_DBNAME", "POSTGRES_DB")
 
-	// Redis
-	_ = cm.viper.BindEnv("redis.host", "CSA_REDIS_HOST", "REDIS_HOST")
-	_ = cm.viper.BindEnv("redis.port", "CSA_REDIS_PORT", "REDIS_PORT")
-	_ = cm.viper.BindEnv("redis.password", "CSA_REDIS_PASSWORD", "REDIS_PASSWORD")
-
-	// ADK
-	_ = cm.viper.BindEnv("adk.project_id", "CSA_ADK_PROJECT_ID", "GOOGLE_CLOUD_PROJECT")
-	_ = cm.viper.BindEnv("adk.api_key", "CSA_ADK_API_KEY", "GOOGLE_API_KEY")
-
-	// GitHub
-	_ = cm.viper.BindEnv("github.token", "CSA_GITHUB_TOKEN", "GITHUB_TOKEN")
-	_ = cm.viper.BindEnv("github.webhook_secret", "CSA_GITHUB_WEBHOOK_SECRET", "GITHUB_WEBHOOK_SECRET")
 }
 
 // Validate validates the configuration.
@@ -734,11 +486,6 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("database: %w", err))
 	}
 
-	// Validate Redis config
-	if err := c.Redis.Validate(); err != nil {
-		errs = append(errs, fmt.Errorf("redis: %w", err))
-	}
-
 	// Validate Git config
 	if err := c.Git.Validate(); err != nil {
 		errs = append(errs, fmt.Errorf("git: %w", err))
@@ -747,16 +494,6 @@ func (c *Config) Validate() error {
 	// Validate Scanner config
 	if err := c.Scanner.Validate(); err != nil {
 		errs = append(errs, fmt.Errorf("scanner: %w", err))
-	}
-
-	// Validate ADK config
-	if err := c.ADK.Validate(); err != nil {
-		errs = append(errs, fmt.Errorf("adk: %w", err))
-	}
-
-	// Validate Queue config
-	if err := c.Queue.Validate(); err != nil {
-		errs = append(errs, fmt.Errorf("queue: %w", err))
 	}
 
 	// Validate Logging config
@@ -842,27 +579,6 @@ func (c DatabaseConfig) Validate() error {
 	return nil
 }
 
-// Validate validates the Redis configuration.
-func (c RedisConfig) Validate() error {
-	if c.Host == "" {
-		return errors.New("host is required")
-	}
-
-	if c.Port < 1 || c.Port > 65535 {
-		return fmt.Errorf("port must be between 1 and 65535, got %d", c.Port)
-	}
-
-	if c.DB < 0 || c.DB > 15 {
-		return fmt.Errorf("db must be between 0 and 15, got %d", c.DB)
-	}
-
-	if c.PoolSize < 1 {
-		return errors.New("pool_size must be at least 1")
-	}
-
-	return nil
-}
-
 // Validate validates the Git configuration.
 func (c GitConfig) Validate() error {
 	if c.TempDir == "" {
@@ -907,56 +623,6 @@ func (c ScannerConfig) Validate() error {
 
 	if c.MaxFilesPerScan <= 0 {
 		return errors.New("max_files_per_scan must be positive")
-	}
-
-	return nil
-}
-
-// Validate validates the ADK configuration.
-func (c ADKConfig) Validate() error {
-	if !c.Enabled {
-		return nil // Skip validation if ADK is disabled
-	}
-
-	if c.ProjectID == "" && c.APIKey == "" {
-		return errors.New("either project_id or api_key is required")
-	}
-
-	if c.Model == "" {
-		return errors.New("model is required")
-	}
-
-	if c.Temperature < 0 || c.Temperature > 1 {
-		return fmt.Errorf("temperature must be between 0 and 1, got %f", c.Temperature)
-	}
-
-	if c.MaxTokens < 1 {
-		return errors.New("max_tokens must be at least 1")
-	}
-
-	if c.Timeout <= 0 {
-		return errors.New("timeout must be positive")
-	}
-
-	return nil
-}
-
-// Validate validates the Queue configuration.
-func (c QueueConfig) Validate() error {
-	if c.Concurrency < 1 {
-		return errors.New("concurrency must be at least 1")
-	}
-
-	if c.MaxRetries < 0 {
-		return errors.New("max_retries cannot be negative")
-	}
-
-	if c.RetryDelay < 0 {
-		return errors.New("retry_delay cannot be negative")
-	}
-
-	if c.ShutdownTimeout <= 0 {
-		return errors.New("shutdown_timeout must be positive")
 	}
 
 	return nil

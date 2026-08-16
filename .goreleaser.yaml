@@ -1,0 +1,287 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: bastion
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  # The CLI scanner. Primary artifact, so every platform.
+  - id: bastion
+    binary: bastion
+    main: ./cmd/bastion
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  # MCP stdio server. Same matrix as the CLI: MCP hosts run everywhere.
+  - id: bastion-mcp
+    binary: bastion-mcp
+    main: ./cmd/bastion-mcp
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  # HTTP API server. Linux and darwin only: it is a long-running daemon that
+  # needs Postgres and a config file, deployed via container or systemd.
+  # Windows service hosting is not a documented target, so shipping it there
+  # would add ~20MB to every .zip for a deployment nobody runs.
+  - id: bastion-api
+    binary: bastion-api
+    main: ./cmd/bastion-api
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  # One archive holding all three binaries. A Homebrew cask resolves to exactly
+  # one archive URL per platform, so splitting these would force either three
+  # casks or a cask that ships only the CLI.
+  - id: bastion
+    ids: [bastion, bastion-mcp, bastion-api]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Required: windows archives carry 2 binaries, unix carries 3.
+    allow_different_binary_count: true
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - bastion.yaml.example
+      - src: docs/*
+        dst: docs
+        strip_parent: true
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  abbrev: 8
+  filters:
+    exclude:
+      - "^docs:"
+      - "^doc:"
+      - "^test:"
+      - "^tests:"
+      - "^chore:"
+      - "^ci:"
+      - "^style:"
+      - "^build\\(deps\\):"
+      - "Merge pull request"
+      - "Merge branch"
+      - "^bump"
+  groups:
+    - title: "Security"
+      regexp: '^.*?sec(urity)?(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "New scanner rules and features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: "Performance"
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: "Refactors"
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 4
+    - title: "Other"
+      order: 999
+
+homebrew_casks:
+  - name: bastion
+    ids: [bastion]
+    binaries:
+      - bastion
+      - bastion-mcp
+      - bastion-api
+    repository:
+      owner: BintangDiLangit
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/BintangDiLangit/bastion"
+    description: "Local-first security review for developers and AI coding agents"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore(cask): bastion {{ .Tag }}"
+    # The binaries are unsigned and un-notarized. Without stripping the
+    # quarantine attribute, macOS Gatekeeper refuses to launch them after a
+    # cask install ("cannot be opened because the developer cannot be
+    # verified"), which is the most common cask bug report there is.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            ["bastion", "bastion-mcp", "bastion-api"].each do |bin|
+              system_command "/usr/bin/xattr",
+                             args: ["-dr", "com.apple.quarantine", "#{staged_path}/#{bin}"],
+                             must_succeed: false
+            end
+          end
+    zap:
+      trash:
+        - "~/.bastion"
+
+nfpms:
+  - id: bastion
+    package_name: bastion
+    ids: [bastion, bastion-mcp, bastion-api]
+    vendor: BintangDiLangit
+    homepage: "https://github.com/BintangDiLangit/bastion"
+    maintainer: "BintangDiLangit <bintangmfhd@gmail.com>"
+    description: |-
+      Local-first security review for developers and AI coding agents.
+      Bastion scans source code with deterministic rules and produces stable
+      finding fingerprints, so a scan can be compared with its baseline.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    file_name_template: "{{ .ConventionalFileName }}"
+    mtime: "{{ .CommitDate }}"
+    # git is a runtime dependency: `bastion scan <git-url>` clones the target.
+    dependencies:
+      - git
+    contents:
+      - src: ./configs/config.yaml
+        dst: /etc/bastion/config.yaml
+        type: config|noreplace
+      - src: ./bastion.yaml.example
+        dst: /etc/bastion/bastion.yaml.example
+        type: config
+      - src: ./LICENSE
+        dst: /usr/share/doc/bastion/LICENSE
+      - src: ./README.md
+        dst: /usr/share/doc/bastion/README.md
+
+dockers_v2:
+  # Scanner image:
+  #   docker run --rm -v "$PWD:/src" ghcr.io/bintangdilangit/bastion
+  - id: bastion
+    ids: [bastion, bastion-mcp]
+    dockerfile: deployments/docker/Dockerfile.release
+    images:
+      - "ghcr.io/bintangdilangit/bastion"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.title: "bastion"
+      org.opencontainers.image.description: "Local-first security review for developers and AI coding agents"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.licenses: "MIT"
+      # Required for GHCR to link the package to this repository.
+      org.opencontainers.image.source: "https://github.com/BintangDiLangit/bastion"
+
+  # API server image. Separate from the scanner: different lifecycle (needs
+  # Postgres and a config file), different entrypoint, and it is not part of
+  # the CLI's one-shot scan UX.
+  - id: bastion-api
+    ids: [bastion-api]
+    dockerfile: deployments/docker/Dockerfile.api.release
+    images:
+      - "ghcr.io/bintangdilangit/bastion-api"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - configs/config.yaml
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.title: "bastion-api"
+      org.opencontainers.image.description: "Bastion HTTP API server"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.licenses: "MIT"
+      org.opencontainers.image.source: "https://github.com/BintangDiLangit/bastion"
+
+release:
+  github:
+    owner: BintangDiLangit
+    name: bastion
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  footer: |
+    ## Install
+
+    **Homebrew (macOS / Linux)**
+    ```sh
+    brew install --cask BintangDiLangit/tap/bastion
+    ```
+
+    **Docker**
+    ```sh
+    docker run --rm -v "$PWD:/src" ghcr.io/bintangdilangit/bastion:{{ .Version }}
+    ```
+
+    **Debian / Ubuntu**
+    ```sh
+    curl -fsSLO https://github.com/BintangDiLangit/bastion/releases/download/{{ .Tag }}/bastion_{{ .Version }}_linux_amd64.deb
+    sudo dpkg -i bastion_{{ .Version }}_linux_amd64.deb
+    ```
+
+    **Go**
+    ```sh
+    go install github.com/BintangDiLangit/bastion/cmd/bastion@{{ .Tag }}
+    ```

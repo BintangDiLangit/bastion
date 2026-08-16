@@ -19,71 +19,118 @@ server, or a small self-hosted API.
 - **Auditable suppression:** suppress a specific rule with a reason in code.
 - **Useful output:** text for humans, JSON for automation, SARIF for code hosts.
 
-Supported source languages: Go, Python, JavaScript, TypeScript, Java, PHP, and
-Ruby.
+Rules are tuned for Go, Python, JavaScript, TypeScript, Java, PHP, and Ruby.
+Language-agnostic rules — secrets, weak crypto, dependency manifests — apply to
+every recognized text file.
 
-## Try it in 60 seconds
+## Install
 
-Requires Go 1.25 or newer.
+**Homebrew** (macOS and Linux)
+
+```bash
+brew install --cask BintangDiLangit/tap/bastion
+```
+
+**Go** (requires Go 1.25 or newer)
+
+```bash
+go install github.com/BintangDiLangit/bastion/cmd/bastion@latest
+```
+
+**Docker** — no install at all
+
+```bash
+docker run --rm -v "$PWD:/src" ghcr.io/bintangdilangit/bastion
+```
+
+**Debian, RPM, Alpine** packages and prebuilt binaries for macOS, Linux and
+Windows are attached to every
+[release](https://github.com/BintangDiLangit/bastion/releases).
+
+**From source**
 
 ```bash
 git clone https://github.com/BintangDiLangit/bastion.git
-cd bastion
-go run ./cmd/cli scan .
+cd bastion && make build-cli
 ```
 
-Build a reusable binary:
+## Try it in 60 seconds
 
 ```bash
-make build-cli
-./bin/csa scan /path/to/project
+bastion scan .
 ```
 
 Useful commands:
 
 ```bash
 # Keep a machine-readable report
-./bin/csa scan . --format json --output bastion.json
+bastion scan . --format json --output bastion.json
 
 # Produce a GitHub-compatible SARIF report
-./bin/csa scan . --format sarif --output bastion.sarif
+bastion scan . --format sarif --output bastion.sarif
 
-# Select rules or exclude paths
-./bin/csa scan . --rules sql_injection,xss,secrets \
+# Select rules or exclude paths.
+# A selector matches a rule ID or a category, so this keeps both the
+# sql_injection rule and RULE-SQL-001.
+bastion scan . --rules sql_injection,xss,secrets \
   --exclude vendor,node_modules
 
 # Do not fail the command when a critical finding exists
-./bin/csa scan . --fail-on-critical=false
+bastion scan . --fail-on-critical=false
 ```
 
-Run `./bin/csa rules` to see the rules implemented by your installed version.
+`scan` exits non-zero only on a **critical** finding. High findings are
+reported and do not fail the command.
+
+Run `bastion rules` to see the rules implemented by your installed version.
 
 ## Connect an AI coding tool with MCP
 
-```bash
-make build-mcp
-```
-
-Add this server to an MCP client and replace both absolute paths:
+`bastion-mcp` ships alongside the CLI in every install method above (from
+source: `make build-mcp`). Add it to an MCP client, replacing the project path:
 
 ```json
 {
   "mcpServers": {
     "bastion": {
-      "command": "/absolute/path/to/bastion/bin/bastion-mcp",
+      "command": "bastion-mcp",
       "args": ["-root", "/absolute/path/to/project"]
     }
   }
 }
 ```
 
+If your client does not resolve `PATH`, use the absolute path that
+`which bastion-mcp` prints.
+
 Ask the agent: **“Run `bastion_scan` on this project and explain only new
 critical or high findings.”**
 
 The MCP server is read-only. It accepts relative paths inside `-root`, rejects
-path and symlink escapes, and limits scan size. Pass fingerprints from a prior
-result as `baseline_fingerprints` to receive new findings, resolved
-fingerprints, and an unchanged count.
+path and symlink escapes, never reads through a symlink inside the scan tree,
+and limits scan size. Pass fingerprints from a prior result as
+`baseline_fingerprints` to receive new findings, resolved fingerprints, and an
+unchanged count. Reported paths are relative to `-root`, so a scan of one
+subdirectory compares cleanly against a baseline taken from the whole tree.
+
+## Fix findings, don't just list them
+
+Every finding carries a machine-readable `fix` built from the matched code.
+Apply the safe, value-restoring ones (e.g. re-enabling disabled TLS
+verification) directly:
+
+```bash
+bastion fix .          # preview the safe fixes as a diff
+bastion fix . --write  # apply them
+```
+
+Findings whose secure form needs judgement (parameterizing a query, changing a
+hash) ship as `guidance`: the `fix.before`/`fix.after` pair tells an agent or a
+human exactly what to change without rewriting the code blindly.
+
+For agents, the [`security-review` skill](skills/security-review/SKILL.md)
+drives the whole loop — scan, triage, auto-fix, patch the rest, verify the
+delta, and report.
 
 ## Suppress a reviewed false positive
 
@@ -99,6 +146,8 @@ Or suppress selected rules for an entire detector fixture:
 ```go
 // bastion:ignore-file secrets,RULE-DESER-001 -- test signatures only
 ```
+
+Everything after `--` is a human reason and is never read as a rule ID.
 
 `all` is supported for generated files, though excluding the generated path is
 usually clearer.
@@ -150,9 +199,9 @@ make scan
 Important paths:
 
 ```text
-cmd/cli/          local scanner
-cmd/mcp/          MCP stdio server
-cmd/api/          HTTP API
+cmd/bastion/      local scanner
+cmd/bastion-mcp/  MCP stdio server
+cmd/bastion-api/  HTTP API
 internal/scanner/ rule engine
 internal/service/ persisted scan lifecycle and delta
 docs/             API, deployment, CI, and demo guides

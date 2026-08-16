@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
 )
 
 type PostgresScanStore struct {

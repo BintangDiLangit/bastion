@@ -16,7 +16,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 //go:embed migrations/*.sql

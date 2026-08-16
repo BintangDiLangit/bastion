@@ -13,7 +13,7 @@ Show the repository and say that CLI and MCP keep source local.
 
 ```bash
 make build-cli
-./bin/csa scan /path/to/demo-project
+./bin/bastion scan /path/to/demo-project
 ```
 
 Open one finding. Explain rule ID, severity, location, evidence, and stable
@@ -59,7 +59,7 @@ This is the main product moment.
 End on the repository URL and the exact quick-start command:
 
 ```bash
-go run ./cmd/cli scan .
+go run ./cmd/bastion scan .
 ```
 
 ## Recording checklist

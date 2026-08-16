@@ -7,24 +7,24 @@ structured findings. Use the API only when scan history must be shared.
 
 ```bash
 make build-cli
-./bin/csa scan .
+./bin/bastion scan .
 ```
 
 The command exits non-zero when it finds a critical issue. Override this for
 exploration:
 
 ```bash
-./bin/csa scan . --fail-on-critical=false
+./bin/bastion scan . --fail-on-critical=false
 ```
 
 Save JSON for automation or SARIF for a code-scanning platform:
 
 ```bash
-./bin/csa scan . --format json --output bastion.json
-./bin/csa scan . --format sarif --output bastion.sarif
+./bin/bastion scan . --format json --output bastion.json
+./bin/bastion scan . --format sarif --output bastion.sarif
 ```
 
-Use `./bin/csa scan --help` for limits, exclusions, and rule selection.
+Use `./bin/bastion scan --help` for limits, exclusions, and rule selection.
 
 ## Read a finding
 

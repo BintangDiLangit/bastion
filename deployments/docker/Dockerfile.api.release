@@ -1,0 +1,23 @@
+# Release image for the Bastion API server, built by GoReleaser (dockers_v2).
+# Copies the prebuilt binary; it never compiles.
+FROM alpine:3.22
+
+ARG TARGETPLATFORM
+
+# git is required: the API clones the repositories it scans.
+RUN apk add --no-cache ca-certificates git \
+    && adduser -D -u 10001 bastion
+
+COPY ${TARGETPLATFORM}/bastion-api /usr/local/bin/bastion-api
+
+# main.go calls config.Load(""), and internal/config searches ".", "./configs",
+# "/etc/bastion" and "$HOME/.bastion" for a file named config.yaml. So the file
+# goes directly in /etc/bastion, not in a configs/ subdirectory under it.
+COPY configs/config.yaml /etc/bastion/config.yaml
+
+USER bastion
+WORKDIR /home/bastion
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/bastion-api"]

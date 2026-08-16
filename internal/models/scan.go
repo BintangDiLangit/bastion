@@ -14,11 +14,11 @@ import (
 type ScanStatus string
 
 const (
-	ScanStatusPending    ScanStatus = "pending"
-	ScanStatusRunning    ScanStatus = "running"
-	ScanStatusCompleted  ScanStatus = "completed"
-	ScanStatusFailed     ScanStatus = "failed"
-	ScanStatusCancelled  ScanStatus = "cancelled"
+	ScanStatusPending   ScanStatus = "pending"
+	ScanStatusRunning   ScanStatus = "running"
+	ScanStatusCompleted ScanStatus = "completed"
+	ScanStatusFailed    ScanStatus = "failed"
+	ScanStatusCancelled ScanStatus = "cancelled"
 )
 
 // ScanType represents the type of scan.
@@ -43,32 +43,32 @@ const (
 
 // Scan represents a security scan of a repository.
 type Scan struct {
-	ID            uuid.UUID      `db:"id" json:"id"`
-	RepositoryID  uuid.UUID      `db:"repository_id" json:"repository_id"`
-	Status        ScanStatus     `db:"status" json:"status"`
-	Type          ScanType       `db:"type" json:"type"`
-	Trigger       ScanTrigger    `db:"trigger" json:"trigger"`
-	Branch        string         `db:"branch" json:"branch"`
-	CommitSHA     string         `db:"commit_sha" json:"commit_sha"`
-	PRNumber      *int           `db:"pr_number" json:"pr_number,omitempty"`
-	StartedAt     *time.Time     `db:"started_at" json:"started_at,omitempty"`
-	CompletedAt   *time.Time     `db:"completed_at" json:"completed_at,omitempty"`
-	Duration      *int64         `db:"duration_ms" json:"duration_ms,omitempty"` // in milliseconds
-	FilesScanned  int            `db:"files_scanned" json:"files_scanned"`
-	LinesScanned  int            `db:"lines_scanned" json:"lines_scanned"`
-	ErrorMessage  *string        `db:"error_message" json:"error_message,omitempty"`
-	Metadata      ScanMetadata   `db:"metadata" json:"metadata"`
-	CreatedAt     time.Time      `db:"created_at" json:"created_at"`
-	UpdatedAt     time.Time      `db:"updated_at" json:"updated_at"`
+	ID           uuid.UUID    `db:"id" json:"id"`
+	RepositoryID uuid.UUID    `db:"repository_id" json:"repository_id"`
+	Status       ScanStatus   `db:"status" json:"status"`
+	Type         ScanType     `db:"type" json:"type"`
+	Trigger      ScanTrigger  `db:"trigger" json:"trigger"`
+	Branch       string       `db:"branch" json:"branch"`
+	CommitSHA    string       `db:"commit_sha" json:"commit_sha"`
+	PRNumber     *int         `db:"pr_number" json:"pr_number,omitempty"`
+	StartedAt    *time.Time   `db:"started_at" json:"started_at,omitempty"`
+	CompletedAt  *time.Time   `db:"completed_at" json:"completed_at,omitempty"`
+	Duration     *int64       `db:"duration_ms" json:"duration_ms,omitempty"` // in milliseconds
+	FilesScanned int          `db:"files_scanned" json:"files_scanned"`
+	LinesScanned int          `db:"lines_scanned" json:"lines_scanned"`
+	ErrorMessage *string      `db:"error_message" json:"error_message,omitempty"`
+	Metadata     ScanMetadata `db:"metadata" json:"metadata"`
+	CreatedAt    time.Time    `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time    `db:"updated_at" json:"updated_at"`
 }
 
 // ScanMetadata holds additional scan metadata.
 type ScanMetadata struct {
-	Languages      []string          `json:"languages,omitempty"`
-	EnabledRules   []string          `json:"enabled_rules,omitempty"`
-	ExcludedPaths  []string          `json:"excluded_paths,omitempty"`
-	ScanOptions    map[string]string `json:"scan_options,omitempty"`
-	TriggerInfo    TriggerInfo       `json:"trigger_info,omitempty"`
+	Languages     []string          `json:"languages,omitempty"`
+	EnabledRules  []string          `json:"enabled_rules,omitempty"`
+	ExcludedPaths []string          `json:"excluded_paths,omitempty"`
+	ScanOptions   map[string]string `json:"scan_options,omitempty"`
+	TriggerInfo   TriggerInfo       `json:"trigger_info,omitempty"`
 }
 
 // TriggerInfo holds information about what triggered the scan.
@@ -90,12 +90,12 @@ func (m *ScanMetadata) Scan(value interface{}) error {
 		*m = ScanMetadata{}
 		return nil
 	}
-	
+
 	bytes, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")
 	}
-	
+
 	return json.Unmarshal(bytes, m)
 }
 
@@ -130,7 +130,7 @@ func (s *Scan) Complete(filesScanned, linesScanned int) {
 	s.FilesScanned = filesScanned
 	s.LinesScanned = linesScanned
 	s.UpdatedAt = now
-	
+
 	if s.StartedAt != nil {
 		duration := now.Sub(*s.StartedAt).Milliseconds()
 		s.Duration = &duration
@@ -144,7 +144,7 @@ func (s *Scan) Fail(errMsg string) {
 	s.CompletedAt = &now
 	s.ErrorMessage = &errMsg
 	s.UpdatedAt = now
-	
+
 	if s.StartedAt != nil {
 		duration := now.Sub(*s.StartedAt).Milliseconds()
 		s.Duration = &duration
@@ -157,7 +157,7 @@ func (s *Scan) Cancel() {
 	s.Status = ScanStatusCancelled
 	s.CompletedAt = &now
 	s.UpdatedAt = now
-	
+
 	if s.StartedAt != nil {
 		duration := now.Sub(*s.StartedAt).Milliseconds()
 		s.Duration = &duration
@@ -173,16 +173,16 @@ func (s *Scan) IsFinished() bool {
 
 // ScanSummary represents a summary of scan results.
 type ScanSummary struct {
-	ScanID              uuid.UUID `json:"scan_id"`
-	TotalVulnerabilities int      `json:"total_vulnerabilities"`
-	Critical            int       `json:"critical"`
-	High                int       `json:"high"`
-	Medium              int       `json:"medium"`
-	Low                 int       `json:"low"`
-	Info                int       `json:"info"`
-	FilesScanned        int       `json:"files_scanned"`
-	LinesScanned        int       `json:"lines_scanned"`
-	Duration            int64     `json:"duration_ms"`
+	ScanID               uuid.UUID `json:"scan_id"`
+	TotalVulnerabilities int       `json:"total_vulnerabilities"`
+	Critical             int       `json:"critical"`
+	High                 int       `json:"high"`
+	Medium               int       `json:"medium"`
+	Low                  int       `json:"low"`
+	Info                 int       `json:"info"`
+	FilesScanned         int       `json:"files_scanned"`
+	LinesScanned         int       `json:"lines_scanned"`
+	Duration             int64     `json:"duration_ms"`
 }
 
 // ScanRequest represents a request to start a new scan.
@@ -215,12 +215,12 @@ type ScanListFilter struct {
 
 // ScanProgress represents the progress of an ongoing scan.
 type ScanProgress struct {
-	ScanID         uuid.UUID `json:"scan_id"`
+	ScanID         uuid.UUID  `json:"scan_id"`
 	Status         ScanStatus `json:"status"`
-	Phase          string    `json:"phase"` // cloning, parsing, analyzing, reporting
-	Progress       float64   `json:"progress"` // 0-100
-	FilesProcessed int       `json:"files_processed"`
-	TotalFiles     int       `json:"total_files"`
-	CurrentFile    string    `json:"current_file,omitempty"`
-	Message        string    `json:"message,omitempty"`
+	Phase          string     `json:"phase"`    // cloning, parsing, analyzing, reporting
+	Progress       float64    `json:"progress"` // 0-100
+	FilesProcessed int        `json:"files_processed"`
+	TotalFiles     int        `json:"total_files"`
+	CurrentFile    string     `json:"current_file,omitempty"`
+	Message        string     `json:"message,omitempty"`
 }

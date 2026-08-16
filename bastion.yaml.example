@@ -1,0 +1,44 @@
+# Bastion engagement config — copy to bastion.yaml and edit.
+# Registers the applications to assess and the assessor identity that appears on
+# report covers. Run: bastion report --project avora -o avora-report
+
+assessor:
+  name: "Your Name"
+  company: "Bastion Security"
+  contact: "security@bastion.example"
+  # Optional white-label branding on the report cover + masthead:
+  # logo: /path/to/firm-logo.png    # png/jpg/svg/gif/webp, embedded (max 2MB)
+  # brand_color: "#123a5e"          # #rrggbb — recolors headings, cover, masthead
+
+projects:
+  # Local source folder — nothing extra to configure.
+  - name: sapa
+    client: "Sapa Ltd."
+    contact: "cto@sapa.example"
+    source:
+      type: local
+      path: /path/to/sapa
+
+  # Private git repo — the token comes from an env var (never stored here).
+  # export AVORA_GIT_TOKEN=ghp_xxx   (or BASTION_GIT_TOKEN as the default)
+  - name: avora
+    client: "Avora Inc."
+    contact: "cto@avora.example"
+    source:
+      type: git
+      url: https://github.com/your-org/avora.git
+      branch: main
+      token_env: AVORA_GIT_TOKEN
+
+  - name: airapay
+    client: "Airapay"
+    source:
+      type: git
+      url: https://github.com/your-org/airapay.git
+      branch: main
+
+  - name: airatech
+    client: "Airatech"
+    source:
+      type: local
+      path: /path/to/airatech

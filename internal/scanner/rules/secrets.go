@@ -322,25 +322,32 @@ func (r *SecretsRule) Check(file ParsedFile) []Finding {
 		}
 
 		for _, pattern := range r.secretPatterns {
-			if pattern.regex.MatchString(line) {
-				// Additional validation
-				if r.isLikelySecret(line, pattern) {
-					vuln := Finding{
-						RuleID:      r.ID(),
-						Title:       fmt.Sprintf("%s: %s", r.Name(), pattern.description),
-						Description: fmt.Sprintf("Detected potential %s in source code", pattern.description),
-						Severity:    string(pattern.severity),
-						Category:    string(r.GetCategory()),
-						FilePath:    file.GetPath(),
-						Line:        lineNum,
-						CodeSnippet: r.maskSecret(getCodeSnippet(file.GetLines(), lineNum, 2)),
-						Remediation: r.remediation,
-						CWE:         "CWE-798",
-						Confidence:  pattern.confidence,
-						References:  []string{"CWE-798"},
-					}
-					vulns = append(vulns, vuln)
+			loc := pattern.regex.FindStringIndex(line)
+			if loc == nil {
+				continue
+			}
+			// Additional validation
+			if r.isLikelySecret(line, pattern) {
+				vuln := Finding{
+					RuleID:      r.ID(),
+					Title:       fmt.Sprintf("%s: %s", r.Name(), pattern.description),
+					Description: fmt.Sprintf("Detected potential %s in source code", pattern.description),
+					Severity:    string(pattern.severity),
+					Category:    string(r.GetCategory()),
+					FilePath:    file.GetPath(),
+					Line:        lineNum,
+					Column:      loc[0] + 1,
+					CodeSnippet: r.maskSecret(getCodeSnippet(file.GetLines(), lineNum, 2)),
+					Remediation: r.remediation,
+					CWE:         "CWE-798",
+					Confidence:  pattern.confidence,
+					References:  []string{"CWE-798"},
+					// Masked so the raw secret never leaves the scanner.
+					MatchText:  r.maskSecret(line[loc[0]:loc[1]]),
+					MatchStart: loc[0],
+					MatchEnd:   loc[1],
 				}
+				vulns = append(vulns, vuln)
 			}
 		}
 	}

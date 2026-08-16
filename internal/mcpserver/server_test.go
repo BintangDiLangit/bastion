@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/models"
 )
 
 func TestResolveDirectoryRejectsEscape(t *testing.T) {
@@ -26,7 +26,7 @@ func TestResolveDirectoryRejectsEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"..", outside} {
-		if _, err := service.resolveDirectory(path); err == nil {
+		if _, _, err := service.resolveDirectory(path); err == nil {
 			t.Errorf("resolveDirectory(%q) accepted escape", path)
 		}
 	}
@@ -34,7 +34,7 @@ func TestResolveDirectoryRejectsEscape(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.resolveDirectory("link"); err == nil {
+	if _, _, err := service.resolveDirectory("link"); err == nil {
 		t.Error("resolveDirectory accepted symlink escape")
 	}
 }

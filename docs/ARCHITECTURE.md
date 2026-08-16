@@ -23,18 +23,18 @@ interprocedural data-flow graph, so findings require developer review.
 
 ## CLI
 
-`cmd/cli` scans a local path and emits text, JSON, or SARIF. It needs no network,
+`cmd/bastion` scans a local path and emits text, JSON, or SARIF. It needs no network,
 database, account, or API key.
 
 ## MCP
 
-`cmd/mcp` exposes one read-only stdio tool, `bastion_scan`. A configured root,
+`cmd/bastion-mcp` exposes one read-only stdio tool, `bastion_scan`. A configured root,
 path containment checks, symlink checks, and file limits bound agent access.
 Optional baseline fingerprints produce a delta in the same response.
 
 ## API
 
-`cmd/api` accepts authenticated scan requests. The lifecycle service:
+`cmd/bastion-api` accepts authenticated scan requests. The lifecycle service:
 
 1. validates a public HTTPS repository URL against configured hosts;
 2. creates a pending PostgreSQL record;

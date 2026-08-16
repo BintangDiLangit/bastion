@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"code-security-auditor/internal/scanner/rules"
+	"github.com/BintangDiLangit/bastion/internal/scanner/rules"
 )
 
 func TestFindingFingerprintIgnoresLineNumber(t *testing.T) {

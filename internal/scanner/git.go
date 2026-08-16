@@ -3,8 +3,6 @@ package scanner
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +23,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 var (
@@ -63,8 +61,9 @@ type GitManager struct {
 
 // NewGitManager creates a new GitManager instance.
 func NewGitManager(cfg config.GitConfig, logger *logrus.Logger) (*GitManager, error) {
-	// Ensure temp directory exists
-	if err := os.MkdirAll(cfg.TempDir, 0755); err != nil {
+	// Ensure temp directory exists.
+	// 0700: clones hold untrusted third-party source, often on a shared host.
+	if err := os.MkdirAll(cfg.TempDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
@@ -140,9 +139,12 @@ func (g *GitManager) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 		g.mu.Unlock()
 	}()
 
-	// Create unique clone directory
-	clonePath := g.generateClonePath(opts.URL)
-	if err := os.MkdirAll(clonePath, 0755); err != nil {
+	// Create unique clone directory.
+	// MkdirTemp rather than a name derived from the URL and the clock: the old
+	// name was predictable, so another local user could pre-create or race it.
+	// 0700 because the contents are untrusted third-party source.
+	clonePath, err := os.MkdirTemp(g.tempDir, "repo-")
+	if err != nil {
 		return nil, fmt.Errorf("failed to create clone directory: %w", err)
 	}
 
@@ -191,10 +193,45 @@ func (g *GitManager) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	cloneCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Enforce the size cap during the transfer. Checking only after the clone
+	// finishes lets an untrusted URL fill the disk first and be rejected after
+	// the damage is done.
+	//
+	// ponytail: polls the directory size on a ticker. Coarse — it can overshoot
+	// by one interval's worth of data — but it needs no filesystem quota and no
+	// custom billy backend. Swap in a quota-backed volume if the overshoot
+	// matters.
+	oversize := make(chan struct{})
+	if g.config.MaxRepoSize > 0 {
+		stopWatch := make(chan struct{})
+		defer close(stopWatch)
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopWatch:
+					return
+				case <-ticker.C:
+					if size, err := g.getDirectorySize(clonePath); err == nil && size > g.config.MaxRepoSize {
+						close(oversize)
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+	}
+
 	// Clone repository
 	repo, err := git.PlainCloneContext(cloneCtx, clonePath, false, cloneOpts)
 	if err != nil {
 		os.RemoveAll(clonePath)
+		select {
+		case <-oversize:
+			return nil, fmt.Errorf("%w: exceeded %d bytes during clone", ErrRepositoryTooLarge, g.config.MaxRepoSize)
+		default:
+		}
 		return nil, g.handleCloneError(err)
 	}
 
@@ -244,13 +281,6 @@ func (g *GitManager) Clone(ctx context.Context, opts CloneOptions) (*CloneResult
 	return result, nil
 }
 
-// generateClonePath generates a unique path for cloning.
-func (g *GitManager) generateClonePath(repoURL string) string {
-	hash := sha256.Sum256([]byte(repoURL + time.Now().String()))
-	hashStr := hex.EncodeToString(hash[:8])
-	return filepath.Join(g.tempDir, fmt.Sprintf("repo-%s-%d", hashStr, time.Now().UnixNano()))
-}
-
 // handleCloneError converts Git errors to our error types.
 func (g *GitManager) handleCloneError(err error) error {
 	if err == nil {
@@ -294,42 +324,53 @@ func (g *GitManager) ValidateRepositoryURL(repoURL string) error {
 	// Sanitize and validate URL
 	repoURL = strings.TrimSpace(repoURL)
 
-	// Check for path traversal attempts
-	if strings.Contains(repoURL, "..") {
-		return fmt.Errorf("%w: URL contains path traversal", ErrPathTraversal)
-	}
-
 	// Parse URL
 	parsedURL, err := url.Parse(repoURL)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidRepositoryURL, err)
 	}
 
-	// Check for valid schemes
-	validSchemes := map[string]bool{"https": true, "http": true, "git": true, "ssh": true, "file": true}
+	// Only transports that actually go over the network to a named host.
+	// file:// would clone from the API server's own disk, and http:// and git://
+	// are unauthenticated and unencrypted, so the host allowlist below means
+	// nothing against an on-path attacker.
+	validSchemes := map[string]bool{"https": true, "ssh": true}
 	if !validSchemes[parsedURL.Scheme] {
-		return fmt.Errorf("%w: unsupported scheme %s", ErrInvalidRepositoryURL, parsedURL.Scheme)
+		return fmt.Errorf("%w: unsupported scheme %q", ErrInvalidRepositoryURL, parsedURL.Scheme)
 	}
 
-	// Check against allowed hosts if configured
-	if len(g.config.SupportedHosts) > 0 {
-		host := parsedURL.Host
-		// Remove port if present
-		if idx := strings.Index(host, ":"); idx != -1 {
-			host = host[:idx]
+	// Credentials in the URL would be logged and stored with the scan record.
+	// An SSH username ("ssh://git@host/...") is not a credential; a password,
+	// or any userinfo on an https URL (that is where tokens get pasted), is.
+	if parsedURL.User != nil {
+		if _, hasPassword := parsedURL.User.Password(); hasPassword || parsedURL.Scheme == "https" {
+			return fmt.Errorf("%w: URL must not embed credentials", ErrInvalidRepositoryURL)
 		}
+	}
 
-		allowed := false
-		for _, supportedHost := range g.config.SupportedHosts {
-			if strings.EqualFold(host, supportedHost) {
-				allowed = true
-				break
-			}
-		}
+	// An empty allowlist is a misconfiguration, not permission to clone
+	// anything the process can reach.
+	if len(g.config.SupportedHosts) == 0 {
+		return fmt.Errorf("%w: no supported hosts configured", ErrUnsupportedHost)
+	}
 
-		if !allowed {
-			return fmt.Errorf("%w: %s", ErrUnsupportedHost, host)
+	host := parsedURL.Hostname()
+	allowed := false
+	for _, supportedHost := range g.config.SupportedHosts {
+		if strings.EqualFold(host, supportedHost) {
+			allowed = true
+			break
 		}
+	}
+	if !allowed {
+		return fmt.Errorf("%w: %s", ErrUnsupportedHost, host)
+	}
+
+	// Reject traversal only in the path, after the host has been vetted.
+	// Testing the whole URL rejected legitimate hosts and was bypassable via
+	// percent-encoding anyway.
+	if strings.Contains(parsedURL.Path, "..") {
+		return fmt.Errorf("%w: URL path contains path traversal", ErrPathTraversal)
 	}
 
 	return nil

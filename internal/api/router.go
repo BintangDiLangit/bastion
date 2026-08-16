@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/api/handlers"
-	"code-security-auditor/internal/api/middleware"
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/api/handlers"
+	"github.com/BintangDiLangit/bastion/internal/api/middleware"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 // Router holds the HTTP router and its dependencies.
@@ -42,6 +42,16 @@ func NewRouter(deps RouterDeps) *Router {
 	}
 
 	engine := gin.New()
+
+	// ClientIP() honours X-Forwarded-For / X-Real-IP for trusted proxies, and
+	// gin trusts every proxy by default. The rate limiter keys on ClientIP, so
+	// a caller could rotate that header and get an unlimited number of buckets.
+	// Trust nothing: ClientIP() then returns the real socket address.
+	// ponytail: if you deploy behind a load balancer, set this to that
+	// balancer's address rather than removing the call.
+	if err := engine.SetTrustedProxies(nil); err != nil {
+		deps.Logger.WithError(err).Warn("failed to clear trusted proxies")
+	}
 
 	router := &Router{
 		engine:        engine,
