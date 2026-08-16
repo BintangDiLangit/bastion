@@ -92,6 +92,7 @@ traversal, insecure randomness, and disabled TLS verification.`,
 
 	// Add commands
 	rootCmd.AddCommand(scanCmd())
+	rootCmd.AddCommand(fixCmd())
 	rootCmd.AddCommand(reportCmd())
 	rootCmd.AddCommand(rulesCmd())
 	rootCmd.AddCommand(versionCmd())
@@ -478,6 +479,9 @@ func outputResults(result *scanner.ScanResult, log *logrus.Logger, opts scanOpti
 			OWASP:       v.References.OWASP,
 			CVSSScore:   v.CVSSScore,
 			CVSSVector:  v.CVSSVector,
+			Fix:         v.Fix,
+			ColumnStart: v.ColumnStart,
+			ColumnEnd:   v.ColumnEnd,
 		})
 	}
 
@@ -555,22 +559,25 @@ type ScanSummary struct {
 
 // VulnOutput represents vulnerability output.
 type VulnOutput struct {
-	RuleID      string   `json:"rule_id"`
-	Fingerprint string   `json:"fingerprint"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Severity    string   `json:"severity"`
-	Category    string   `json:"category"`
-	FilePath    string   `json:"file_path"`
-	LineStart   int      `json:"line_start"`
-	LineEnd     int      `json:"line_end"`
-	CodeSnippet string   `json:"code_snippet,omitempty"`
-	Remediation string   `json:"remediation,omitempty"`
-	Confidence  float64  `json:"confidence"`
-	CWE         []string `json:"cwe,omitempty"`
-	OWASP       []string `json:"owasp,omitempty"`
-	CVSSScore   float64  `json:"cvss_score,omitempty"`
-	CVSSVector  string   `json:"cvss_vector,omitempty"`
+	RuleID      string      `json:"rule_id"`
+	Fingerprint string      `json:"fingerprint"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Severity    string      `json:"severity"`
+	Category    string      `json:"category"`
+	FilePath    string      `json:"file_path"`
+	LineStart   int         `json:"line_start"`
+	LineEnd     int         `json:"line_end"`
+	ColumnStart *int        `json:"column_start,omitempty"`
+	ColumnEnd   *int        `json:"column_end,omitempty"`
+	CodeSnippet string      `json:"code_snippet,omitempty"`
+	Remediation string      `json:"remediation,omitempty"`
+	Confidence  float64     `json:"confidence"`
+	CWE         []string    `json:"cwe,omitempty"`
+	OWASP       []string    `json:"owasp,omitempty"`
+	CVSSScore   float64     `json:"cvss_score,omitempty"`
+	CVSSVector  string      `json:"cvss_vector,omitempty"`
+	Fix         *models.Fix `json:"fix,omitempty"`
 }
 
 // buildSummary builds the scan summary.
@@ -667,7 +674,7 @@ func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
 			region["endLine"] = v.LineEnd
 		}
 
-		results = append(results, map[string]interface{}{
+		result := map[string]interface{}{
 			"ruleId": v.RuleID,
 			"level":  level,
 			"partialFingerprints": map[string]string{
@@ -686,7 +693,35 @@ func buildSARIFResults(vulns []VulnOutput) []map[string]interface{} {
 					},
 				},
 			},
-		})
+		}
+
+		// SARIF `fixes` implies applicability, so emit it only for a
+		// deterministic replacement with a known column span.
+		if v.Fix != nil && v.Fix.Kind == models.FixSafeReplace &&
+			v.ColumnStart != nil && v.ColumnEnd != nil {
+			result["fixes"] = []map[string]interface{}{
+				{
+					"description": map[string]string{"text": v.Fix.Summary},
+					"artifactChanges": []map[string]interface{}{
+						{
+							"artifactLocation": map[string]string{"uri": v.FilePath},
+							"replacements": []map[string]interface{}{
+								{
+									"deletedRegion": map[string]int{
+										"startLine":   startLine,
+										"startColumn": *v.ColumnStart,
+										"endColumn":   *v.ColumnEnd,
+									},
+									"insertedContent": map[string]string{"text": v.Fix.Replacement},
+								},
+							},
+						},
+					},
+				},
+			}
+		}
+
+		results = append(results, result)
 	}
 
 	return results
@@ -716,7 +751,15 @@ func toText(output ScanOutput) []byte {
 		for i, v := range output.Vulnerabilities {
 			text += fmt.Sprintf("%d. [%s] %s\n", i+1, v.Severity, v.Title)
 			text += fmt.Sprintf("   File: %s:%d\n", v.FilePath, v.LineStart)
-			text += fmt.Sprintf("   %s\n\n", v.Description)
+			text += fmt.Sprintf("   %s\n", v.Description)
+			if v.Fix != nil {
+				tag := "suggested fix"
+				if v.Fix.Kind == models.FixSafeReplace {
+					tag = "auto-fixable"
+				}
+				text += fmt.Sprintf("   Fix (%s): %s\n", tag, v.Fix.Summary)
+			}
+			text += "\n"
 		}
 	}
 

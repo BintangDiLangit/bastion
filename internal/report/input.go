@@ -90,6 +90,7 @@ type ReportFinding struct {
 	Description string
 	CodeSnippet string
 	Remediation string
+	Fix         *models.Fix
 	URLs        []string
 }
 
@@ -177,6 +178,7 @@ func FromInput(in Input) ReportModel {
 			Description: v.Description,
 			CodeSnippet: v.CodeSnippet,
 			Remediation: v.Remediation,
+			Fix:         v.Fix,
 			URLs:        v.References.URLs,
 		})
 	}

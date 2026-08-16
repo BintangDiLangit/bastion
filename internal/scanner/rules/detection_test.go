@@ -18,6 +18,24 @@ func TestSQLInjectionSignal(t *testing.T) {
 	}
 }
 
+// The suggested-fix feature relies on the match span being captured. An
+// interface rule (SQL) and a pattern rule (TLS) exercise both match sites.
+func TestMatchSpanCaptured(t *testing.T) {
+	line := `db.Query("SELECT * FROM users WHERE id=" + userID)`
+	got := NewSQLInjectionRule().Check(parsed("app.go", "go", line))
+	if len(got) != 1 {
+		t.Fatalf("got %d findings", len(got))
+	}
+	f := got[0]
+	if f.MatchText == "" || f.MatchEnd <= f.MatchStart {
+		t.Fatalf("no span captured: text=%q start=%d end=%d", f.MatchText, f.MatchStart, f.MatchEnd)
+	}
+	if line[f.MatchStart:f.MatchEnd] != f.MatchText {
+		t.Errorf("span/text disagree: line[%d:%d]=%q, MatchText=%q",
+			f.MatchStart, f.MatchEnd, line[f.MatchStart:f.MatchEnd], f.MatchText)
+	}
+}
+
 func TestXSSSignal(t *testing.T) {
 	rule := NewXSSRule()
 	if got := rule.Check(parsed("app.js", "javascript", `element.innerHTML = userInput`)); len(got) != 1 {

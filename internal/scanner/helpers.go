@@ -59,7 +59,15 @@ func convertFindingsToVulnerabilities(findings []rules.Finding, scanID uuid.UUID
 			Confidence:  f.Confidence,
 			CVSSScore:   cvssScore,
 			CVSSVector:  cvssVector,
+			Fix:         rules.FixForRule(f.RuleID, f.MatchText),
 			CreatedAt:   time.Now(),
+		}
+		// Carry the match span so `bastion fix` has an exact range to rewrite.
+		// Only meaningful when a real substring was captured (MatchEnd > 0).
+		if f.MatchEnd > 0 {
+			start, end := f.MatchStart+1, f.MatchEnd+1
+			vulns[i].ColumnStart = &start
+			vulns[i].ColumnEnd = &end
 		}
 	}
 	return vulns

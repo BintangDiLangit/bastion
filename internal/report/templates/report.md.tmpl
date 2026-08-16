@@ -79,7 +79,16 @@ No findings were identified within the assessed scope.
 **Remediation**
 
 {{ .Remediation }}
-{{ end }}{{ if or .OWASP .URLs }}
+{{ end }}{{ with .Fix }}
+**Suggested Fix**{{ if eq (printf "%s" .Kind) "safe_replace" }} (auto-fixable){{ end }}
+
+{{ .Summary }}
+{{ if .Before }}
+`````diff
+- {{ .Before }}
++ {{ .After }}
+`````
+{{ end }}{{ end }}{{ if or .OWASP .URLs }}
 **References**
 {{ range .OWASP }}
 - {{ . }}{{ end }}{{ range .URLs }}

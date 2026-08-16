@@ -27,6 +27,12 @@ func sampleInput() Input {
 				CVSSScore:   9.8,
 				CVSSVector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
 				Confidence:  0.85,
+				Fix: &models.Fix{
+					Summary: "Pass user input as a query parameter.",
+					Kind:    models.FixGuidance,
+					Before:  `"SELECT * FROM users WHERE id=" + id`,
+					After:   `db.Query("SELECT * FROM users WHERE id = $1", id)`,
+				},
 			},
 			{
 				RuleID:      "RULE-CRYPTO-001",
@@ -83,6 +89,7 @@ func TestRenderHTMLContent(t *testing.T) {
 		"Avora Inc.", "Executive Summary", "SQL Injection in query builder",
 		"CWE-89", "internal/db/query.go:42", "Use parameterized queries.",
 		"9.8 (Critical)", "Remediation Roadmap",
+		"Suggested Fix", "Pass user input as a query parameter.",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("HTML missing %q", want)
@@ -113,6 +120,7 @@ func TestRenderMarkdownContent(t *testing.T) {
 		"# Security Assessment Report", "| Severity | Count |",
 		"SQL Injection in query builder", "CWE-89", "9.8 (Critical)",
 		"`````", "## Remediation Roadmap",
+		"**Suggested Fix**", "Pass user input as a query parameter.",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("Markdown missing %q", want)

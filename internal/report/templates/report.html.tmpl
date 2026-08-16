@@ -273,6 +273,10 @@
     <p>{{ .Description }}</p>
     {{ if .CodeSnippet }}<div class="label">Evidence</div><pre class="evidence">{{ .CodeSnippet }}</pre>{{ end }}
     {{ if .Remediation }}<div class="label">Remediation</div><div class="remediation">{{ .Remediation }}</div>{{ end }}
+    {{ with .Fix }}<div class="label">Suggested Fix{{ if eq (printf "%s" .Kind) "safe_replace" }} <span class="muted">(auto-fixable)</span>{{ end }}</div>
+      <div class="remediation">{{ .Summary }}</div>
+      {{ if .Before }}<pre class="evidence">- {{ .Before }}
++ {{ .After }}</pre>{{ end }}{{ end }}
     {{ if or .OWASP .URLs }}<div class="label">References</div>
       <ul class="reflist">
         {{ range .OWASP }}<li><a href="{{ . }}">{{ . }}</a></li>{{ end }}

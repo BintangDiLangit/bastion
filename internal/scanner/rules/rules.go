@@ -3,8 +3,8 @@
 package rules
 
 import (
-	"github.com/BintangDiLangit/bastion/internal/config"
 	"fmt"
+	"github.com/BintangDiLangit/bastion/internal/config"
 	"regexp"
 	"sort"
 	"strings"
@@ -59,6 +59,13 @@ type Finding struct {
 	CWE         string   `json:"cwe,omitempty"`
 	Confidence  float64  `json:"confidence"`
 	References  []string `json:"references,omitempty"`
+
+	// Matched construct, used to build a suggested Fix from the real code.
+	// MatchStart/MatchEnd are 0-based byte offsets into the matched line;
+	// they feed the finding's column range and the auto-apply span.
+	MatchText  string `json:"match_text,omitempty"`
+	MatchStart int    `json:"-"`
+	MatchEnd   int    `json:"-"`
 }
 
 // ParsedFile interface to avoid import cycle
@@ -388,9 +395,10 @@ func (e *RuleEngine) runPatternRules(file ParsedFile) []Finding {
 			}
 
 			loc := pattern.Pattern.FindStringIndex(line)
-			column := 1
+			column, matchText, start, end := 1, "", 0, 0
 			if loc != nil {
 				column = loc[0] + 1
+				matchText, start, end = line[loc[0]:loc[1]], loc[0], loc[1]
 			}
 
 			findings = append(findings, Finding{
@@ -406,6 +414,9 @@ func (e *RuleEngine) runPatternRules(file ParsedFile) []Finding {
 				Remediation: pattern.Remediation,
 				CWE:         pattern.CWE,
 				Confidence:  pattern.Confidence,
+				MatchText:   matchText,
+				MatchStart:  start,
+				MatchEnd:    end,
 			})
 		}
 	}

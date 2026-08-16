@@ -69,23 +69,29 @@ func (r *XSSRule) Check(file ParsedFile) []Finding {
 
 		patterns := r.getPatterns(file.GetLanguage())
 		for _, pattern := range patterns {
-			if pattern.regex.MatchString(line) {
-				vuln := Finding{
-					RuleID:      r.ID(),
-					Title:       r.Name(),
-					Description: fmt.Sprintf("Potential XSS detected: %s", strings.TrimSpace(line)),
-					Severity:    string(r.GetSeverity()),
-					Category:    string(r.GetCategory()),
-					FilePath:    file.GetPath(),
-					Line:        lineNum,
-					CodeSnippet: getCodeSnippet(file.GetLines(), lineNum, 2),
-					Remediation: r.remediation,
-					CWE:         "CWE-79",
-					Confidence:  0.8,
-					References:  r.GetReferences(),
-				}
-				vulns = append(vulns, vuln)
+			loc := pattern.regex.FindStringIndex(line)
+			if loc == nil {
+				continue
 			}
+			vuln := Finding{
+				RuleID:      r.ID(),
+				Title:       r.Name(),
+				Description: fmt.Sprintf("Potential XSS detected: %s", strings.TrimSpace(line)),
+				Severity:    string(r.GetSeverity()),
+				Category:    string(r.GetCategory()),
+				FilePath:    file.GetPath(),
+				Line:        lineNum,
+				Column:      loc[0] + 1,
+				CodeSnippet: getCodeSnippet(file.GetLines(), lineNum, 2),
+				Remediation: r.remediation,
+				CWE:         "CWE-79",
+				Confidence:  0.8,
+				References:  r.GetReferences(),
+				MatchText:   line[loc[0]:loc[1]],
+				MatchStart:  loc[0],
+				MatchEnd:    loc[1],
+			}
+			vulns = append(vulns, vuln)
 		}
 	}
 
