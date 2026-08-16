@@ -30,7 +30,7 @@ Requires Go 1.25 or newer.
 ```bash
 git clone https://github.com/BintangDiLangit/bastion.git
 cd bastion
-go run ./cmd/cli scan .
+go run ./cmd/bastion scan .
 ```
 
 Build a reusable binary:
@@ -160,9 +160,9 @@ make scan
 Important paths:
 
 ```text
-cmd/cli/          local scanner
-cmd/mcp/          MCP stdio server
-cmd/api/          HTTP API
+cmd/bastion/      local scanner
+cmd/bastion-mcp/  MCP stdio server
+cmd/bastion-api/  HTTP API
 internal/scanner/ rule engine
 internal/service/ persisted scan lifecycle and delta
 docs/             API, deployment, CI, and demo guides

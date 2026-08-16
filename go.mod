@@ -1,4 +1,4 @@
-module code-security-auditor
+module github.com/BintangDiLangit/bastion
 
 go 1.25.0
 

@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner/rules"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner/rules"
 )
 
 // Regression for the data-loss bug: convertFindingsToVulnerabilities used to

@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner/rules"
+	"github.com/BintangDiLangit/bastion/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner/rules"
 )
 
 // mustNewGitManager creates a new GitManager or panics on error.

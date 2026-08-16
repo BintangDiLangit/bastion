@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -17,25 +19,55 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"code-security-auditor/internal/config"
-	"code-security-auditor/internal/engagement"
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/report"
-	"code-security-auditor/internal/scanner"
-	"code-security-auditor/internal/scanner/rules"
+	"github.com/BintangDiLangit/bastion/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/engagement"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/report"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/scanner/rules"
 )
 
 // gitHosts is the clone allowlist for the CLI's git targets. The API server
 // keeps its own stricter, public-only validation.
 var gitHosts = []string{"github.com", "gitlab.com", "bitbucket.org"}
 
+// Build metadata. Overridden at link time with -X main.<name>=<value>; see the
+// ldflags in the Makefile and .goreleaser.yaml.
 var (
-	version = "1.0.0"
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+
 	cfgFile string
 	verbose bool
 	output  string
 	format  string
 )
+
+// init fills the build metadata from the Go module build info when no ldflags
+// were supplied. `go install <module>/cmd/bastion@latest` links without them, so
+// without this every go-installed binary would report itself as "dev".
+func init() {
+	if version != "dev" {
+		return // ldflags won
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		version = info.Main.Version
+	}
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			commit = setting.Value
+		case "vcs.time":
+			date = setting.Value
+		}
+	}
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -753,7 +785,11 @@ func versionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Bastion v%s\n", version)
+			fmt.Printf("Bastion %s\n", version)
+			fmt.Printf("  commit:   %s\n", commit)
+			fmt.Printf("  built:    %s\n", date)
+			fmt.Printf("  built by: %s\n", builtBy)
+			fmt.Printf("  go:       %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		},
 	}
 }

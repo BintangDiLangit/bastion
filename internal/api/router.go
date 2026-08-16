@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/api/handlers"
-	"code-security-auditor/internal/api/middleware"
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/api/handlers"
+	"github.com/BintangDiLangit/bastion/internal/api/middleware"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 // Router holds the HTTP router and its dependencies.

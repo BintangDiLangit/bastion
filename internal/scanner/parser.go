@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 // LanguageParser interface for language-specific parsers.

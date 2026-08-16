@@ -98,8 +98,8 @@ EOF
 # Create required directories
 create_dirs() {
     echo "📁 Creating directories..."
-    mkdir -p /tmp/code-security-auditor/repos
-    mkdir -p /tmp/code-security-auditor/reports
+    mkdir -p /tmp/bastion/repos
+    mkdir -p /tmp/bastion/reports
     mkdir -p logs
     echo -e "${GREEN}✓ Directories created${NC}"
 }
@@ -129,7 +129,7 @@ run_migrations() {
 # Build the application
 build_app() {
     echo "🔨 Building application..."
-    make build 2>/dev/null || go build -o bin/csa ./cmd/cli
+    make build 2>/dev/null || go build -o bin/bastion ./cmd/bastion
     echo -e "${GREEN}✓ Application built${NC}"
 }
 
@@ -143,7 +143,7 @@ print_complete() {
     echo "  2. Edit .env with your environment variables"
     echo "  3. Start the infrastructure: docker-compose up -d"
     echo "  4. Run the API server: make run-api"
-    echo "  5. Or use the CLI: ./bin/csa scan /path/to/code"
+    echo "  5. Or use the CLI: ./bin/bastion scan /path/to/code"
     echo ""
     echo "For more information, see README.md"
 }

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"code-security-auditor/internal/engagement"
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/engagement"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
 )
 
 // Input is the public handoff the CLI fills in. FromInput turns it into the

@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/service"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/service"
 )
 
 type ScanLifecycleHandler struct {

@@ -9,19 +9,31 @@ GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
 
 # Binary names
-BINARY_API=bin/api
+BINARY_API=bin/bastion-api
 BINARY_CLI=bin/bastion
 BINARY_MCP=bin/bastion-mcp
 
 CMD_DIR=./cmd
 BIN_DIR=./bin
 
-LDFLAGS=-ldflags "-w -s"
+# Build metadata. These -X targets match .goreleaser.yaml exactly, so a `make`
+# build and a released build report their version the same way.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
+COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo none)
+DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+BUILT_BY ?= make
+
+LDFLAGS=-ldflags "-w -s \
+	-X main.version=$(VERSION) \
+	-X main.commit=$(COMMIT) \
+	-X main.date=$(DATE) \
+	-X main.builtBy=$(BUILT_BY)"
 BUILD_FLAGS=-trimpath
 
 .PHONY: all build build-api build-cli build-mcp clean test coverage lint fmt vet deps \
 	run-api run-cli scan docker docker-up docker-down docker-logs \
-	migrate migrate-create migrate-reset setup tools help
+	migrate migrate-create migrate-reset setup tools help \
+	release-check release-snapshot release-dry
 
 ## Default target
 all: clean deps lint test build
@@ -33,19 +45,19 @@ build: build-api build-cli build-mcp
 build-api:
 	@echo "Building API server..."
 	@mkdir -p $(BIN_DIR)
-	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_API) $(CMD_DIR)/api
+	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_API) $(CMD_DIR)/bastion-api
 
 ## Build CLI
 build-cli:
 	@echo "Building CLI..."
 	@mkdir -p $(BIN_DIR)
-	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_CLI) $(CMD_DIR)/cli
+	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_CLI) $(CMD_DIR)/bastion
 
 ## Build MCP server
 build-mcp:
 	@echo "Building MCP server..."
 	@mkdir -p $(BIN_DIR)
-	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_MCP) $(CMD_DIR)/mcp
+	$(GOBUILD) $(BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_MCP) $(CMD_DIR)/bastion-mcp
 
 ## Clean build artifacts
 clean:
@@ -143,6 +155,21 @@ setup:
 	@echo "Setting up development environment..."
 	./scripts/setup.sh
 
+## Validate .goreleaser.yaml without building anything
+release-check:
+	@command -v goreleaser >/dev/null 2>&1 || { echo "goreleaser not installed. Run: brew install goreleaser"; exit 1; }
+	goreleaser check
+
+## Build a full release into dist/ without publishing anything
+release-snapshot: release-check
+	@echo "Building release snapshot..."
+	goreleaser release --snapshot --clean
+
+## Full dry run against the current tag: builds and renders every artifact, publishes none
+release-dry: release-check
+	@echo "Dry-run release (no publish)..."
+	goreleaser release --clean --skip=publish,announce
+
 ## Install development tools
 tools:
 	@echo "Installing development tools..."
@@ -176,6 +203,11 @@ help:
 	@echo "    docker-up     Start Docker services"
 	@echo "    docker-down   Stop Docker services"
 	@echo "    docker-logs   View Docker logs"
+	@echo ""
+	@echo "  Release:"
+	@echo "    release-check     Validate .goreleaser.yaml"
+	@echo "    release-snapshot  Build unpublished release into dist/"
+	@echo "    release-dry       Full dry run against current tag (no publish)"
 	@echo ""
 	@echo "  Database:"
 	@echo "    migrate       Run database migrations"

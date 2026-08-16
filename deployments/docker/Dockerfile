@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build API
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bastion-api ./cmd/bastion-api
 
 # Final stage
 FROM alpine:latest
@@ -24,11 +24,11 @@ RUN apk --no-cache add ca-certificates git
 WORKDIR /root/
 
 # Copy binaries
-COPY --from=builder /app/api .
+COPY --from=builder /app/bastion-api .
 
 # Copy configs
 COPY --from=builder /app/configs ./configs
 
 EXPOSE 8080
 
-CMD ["./api"]
+CMD ["./bastion-api"]

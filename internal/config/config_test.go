@@ -10,7 +10,7 @@ func TestLoadExampleConfig(t *testing.T) {
 	if config.Database.DBName != "code_security_auditor" {
 		t.Fatalf("database name = %q", config.Database.DBName)
 	}
-	if config.Git.TempDir != "/tmp/code-security-auditor/repos" {
+	if config.Git.TempDir != "/tmp/bastion/repos" {
 		t.Fatalf("git temp dir = %q", config.Git.TempDir)
 	}
 }

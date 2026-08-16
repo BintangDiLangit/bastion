@@ -23,7 +23,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/config"
 )
 
 var (

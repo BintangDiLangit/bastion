@@ -3,7 +3,7 @@
 package rules
 
 import (
-	"code-security-auditor/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/config"
 	"fmt"
 	"regexp"
 	"sort"

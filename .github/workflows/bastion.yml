@@ -31,7 +31,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Build Bastion
-        run: go build -o /tmp/bastion ./cmd/cli
+        run: go build -o /tmp/bastion ./cmd/bastion
       - name: Scan
         run: /tmp/bastion scan . --format sarif --output bastion.sarif
       - name: Upload SARIF

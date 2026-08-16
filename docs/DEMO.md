@@ -59,7 +59,7 @@ This is the main product moment.
 End on the repository URL and the exact quick-start command:
 
 ```bash
-go run ./cmd/cli scan .
+go run ./cmd/bastion scan .
 ```
 
 ## Recording checklist

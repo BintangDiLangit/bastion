@@ -293,8 +293,8 @@ func (cm *ConfigManager) Load(configPath string) error {
 		cm.viper.SetConfigType("yaml")
 		cm.viper.AddConfigPath(".")
 		cm.viper.AddConfigPath("./configs")
-		cm.viper.AddConfigPath("/etc/code-security-auditor")
-		cm.viper.AddConfigPath("$HOME/.code-security-auditor")
+		cm.viper.AddConfigPath("/etc/bastion")
+		cm.viper.AddConfigPath("$HOME/.bastion")
 
 		// Load environment-specific config
 		cm.viper.SetConfigName(fmt.Sprintf("config.%s", env))
@@ -415,7 +415,7 @@ func (cm *ConfigManager) setDefaults() {
 	v.SetDefault("database.auto_migrate", true)
 
 	// Git defaults
-	v.SetDefault("git.temp_dir", "/tmp/code-security-auditor/repos")
+	v.SetDefault("git.temp_dir", "/tmp/bastion/repos")
 	v.SetDefault("git.clone_timeout", "5m")
 	v.SetDefault("git.max_repo_size", 104857600) // 100MB
 	v.SetDefault("git.supported_hosts", []string{"github.com", "gitlab.com", "bitbucket.org"})
@@ -442,7 +442,7 @@ func (cm *ConfigManager) setDefaults() {
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 	v.SetDefault("logging.output", "stdout")
-	v.SetDefault("logging.file_path", "/var/log/code-security-auditor/app.log")
+	v.SetDefault("logging.file_path", "/var/log/bastion/app.log")
 	v.SetDefault("logging.max_size", 100)
 	v.SetDefault("logging.max_backups", 3)
 	v.SetDefault("logging.max_age", 28)

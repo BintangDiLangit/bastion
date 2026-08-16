@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/models"
 )
 
 func TestResolveDirectoryRejectsEscape(t *testing.T) {

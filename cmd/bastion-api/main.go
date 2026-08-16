@@ -9,13 +9,21 @@ import (
 	"os/signal"
 	"syscall"
 
-	"code-security-auditor/internal/api"
-	"code-security-auditor/internal/api/handlers"
-	"code-security-auditor/internal/config"
-	"code-security-auditor/internal/database"
-	"code-security-auditor/internal/scanner"
-	"code-security-auditor/internal/service"
-	"code-security-auditor/pkg/logger"
+	"github.com/BintangDiLangit/bastion/internal/api"
+	"github.com/BintangDiLangit/bastion/internal/api/handlers"
+	"github.com/BintangDiLangit/bastion/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/database"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/service"
+	"github.com/BintangDiLangit/bastion/pkg/logger"
+)
+
+// Build metadata, injected at link time with -X main.<name>=<value>.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
 )
 
 func main() {
@@ -28,7 +36,7 @@ func main() {
 
 	// Initialize logger
 	log := logger.New(cfg.Logging)
-	log.Info("Starting Code Security Auditor API Server")
+	log.Infof("Starting Bastion API server %s (commit %s, built %s by %s)", version, commit, date, builtBy)
 
 	// Initialize database
 	db, err := database.NewPostgresDB(cfg.Database, log)
@@ -43,7 +51,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(log, db, "1.0.0")
+	healthHandler := handlers.NewHealthHandler(log, db, version)
 	scanRunner := scanner.NewManager(cfg.Scanner, cfg.Git, log)
 	scanStore := service.NewPostgresScanStore(db.DB)
 	scanService := service.NewScans(scanStore, scanRunner, cfg.Scanner, cfg.Git, log)

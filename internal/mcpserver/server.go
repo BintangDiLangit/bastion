@@ -14,9 +14,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sirupsen/logrus"
 
-	"code-security-auditor/internal/config"
-	"code-security-auditor/internal/models"
-	"code-security-auditor/internal/scanner"
+	"github.com/BintangDiLangit/bastion/internal/config"
+	"github.com/BintangDiLangit/bastion/internal/models"
+	"github.com/BintangDiLangit/bastion/internal/scanner"
 )
 
 const maxFindings = 200

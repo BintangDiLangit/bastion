@@ -24,7 +24,7 @@ database:
   conn_max_lifetime: "5m"
 
 git:
-  temp_dir: "/tmp/code-security-auditor/repos"
+  temp_dir: "/tmp/bastion/repos"
   clone_timeout: "5m"
   max_repo_size: 104857600 # 100MB
   supported_hosts: ["github.com", "gitlab.com", "bitbucket.org"]
